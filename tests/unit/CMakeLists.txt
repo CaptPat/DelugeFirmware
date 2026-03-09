@@ -72,7 +72,11 @@ add_executable(UnitTests
         sync_tests.cpp
         chord_tests.cpp
         time_tests.cpp
+<<<<<<< HEAD
         pedal_state_tests.cpp
+=======
+        time_signature_tests.cpp
+>>>>>>> feature/per-clip-time-signature
 )
 add_test(NAME UnitTests
         COMMAND UnitTests)
