@@ -1683,10 +1683,12 @@ void AutomationView::getAutomationParameterName(Clip* clip, OutputType outputTyp
 				parameterName.append(display->haveOLED() ? " -> " : " - ");
 			}
 
-			parameterName.append(params::getPatchedParamShortName(lastSelectedParamID));
+			auto* mc = (ModControllableAudio*)view.activeModControllableModelStack.modControllable;
+			parameterName.append(params::getPatchedParamShortName(lastSelectedParamID, mc));
 		}
 		else {
-			parameterName.append(getParamDisplayName(lastSelectedParamKind, lastSelectedParamID));
+			auto* mc = (ModControllableAudio*)view.activeModControllableModelStack.modControllable;
+			parameterName.append(getParamDisplayName(lastSelectedParamKind, lastSelectedParamID, mc));
 		}
 	}
 	else {
@@ -2767,8 +2769,7 @@ void AutomationView::velocityEditPadAction(ModelStackWithNoteRow* modelStackWith
 	                           && squareInfo.averageVelocity <= nonPatchCableMaxPadDisplayValues[y];
 
 	// check for middle or multi pad press (but not for velocity-head presses, which are delete-intent)
-	if (velocity && squareInfo.numNotes != 0 && instrumentClipView.numEditPadPresses == 1
-	    && !isVelocityHeadPress) {
+	if (velocity && squareInfo.numNotes != 0 && instrumentClipView.numEditPadPresses == 1 && !isVelocityHeadPress) {
 		// Find that original press
 		for (int32_t i = 0; i < kEditPadPressBufferSize; i++) {
 			if (instrumentClipView.editPadPresses[i].isActive) {

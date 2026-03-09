@@ -73,10 +73,14 @@ add_executable(UnitTests
         chord_tests.cpp
         time_tests.cpp
 <<<<<<< HEAD
+<<<<<<< HEAD
         pedal_state_tests.cpp
 =======
         time_signature_tests.cpp
 >>>>>>> feature/per-clip-time-signature
+=======
+        filter_morph_label_tests.cpp
+>>>>>>> bugfix/lpf-drive-label-display
 )
 add_test(NAME UnitTests
         COMMAND UnitTests)
