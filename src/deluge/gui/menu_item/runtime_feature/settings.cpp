@@ -49,9 +49,13 @@ SettingToggle menuEnableGridViewLoopPads(RuntimeFeatureSettingType::EnableGridVi
 SettingToggle menuAlternativeTapTempoBehaviour(RuntimeFeatureSettingType::AlternativeTapTempoBehaviour);
 SettingToggle menuHorizontalMenus(RuntimeFeatureSettingType::HorizontalMenus);
 SettingToggle menuTrimFromStartOfAudioClip(RuntimeFeatureSettingType::TrimFromStartOfAudioClip);
+<<<<<<< HEAD
 SettingToggle menuEnableSustainPedal(RuntimeFeatureSettingType::EnableSustainPedal);
 SettingToggle menuEnableSostenutoPedal(RuntimeFeatureSettingType::EnableSostenutoPedal);
 SettingToggle menuEnableSoftPedal(RuntimeFeatureSettingType::EnableSoftPedal);
+=======
+SettingToggle menuSwapTempoAndSelectEncoders(RuntimeFeatureSettingType::SwapTempoAndSelectEncoders);
+>>>>>>> feature/swap-select-tempo-encoders
 
 std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettings> subMenuEntries{
     &menuDrumRandomizer,
@@ -76,9 +80,13 @@ std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettin
     &menuAlternativeTapTempoBehaviour,
     &menuHorizontalMenus,
     &menuTrimFromStartOfAudioClip,
+<<<<<<< HEAD
     &menuEnableSustainPedal,
     &menuEnableSostenutoPedal,
     &menuEnableSoftPedal};
+=======
+    &menuSwapTempoAndSelectEncoders};
+>>>>>>> feature/swap-select-tempo-encoders
 
 Settings::Settings(l10n::String name, l10n::String title) : menu_item::Submenu(name, title, subMenuEntries) {
 }
