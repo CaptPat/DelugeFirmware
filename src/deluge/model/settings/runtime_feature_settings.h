@@ -65,13 +65,10 @@ enum RuntimeFeatureSettingType : uint32_t {
 	AlternativeTapTempoBehaviour,
 	HorizontalMenus,
 	TrimFromStartOfAudioClip,
-<<<<<<< HEAD
 	EnableSustainPedal,
 	EnableSostenutoPedal,
 	EnableSoftPedal,
-=======
 	SwapTempoAndSelectEncoders,
->>>>>>> feature/swap-select-tempo-encoders
 	MaxElement // Keep as boundary
 };
 

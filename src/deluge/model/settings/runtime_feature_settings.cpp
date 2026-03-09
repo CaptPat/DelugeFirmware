@@ -196,7 +196,6 @@ void RuntimeFeatureSettings::init() {
 	                  STRING_FOR_COMMUNITY_FEATURE_TRIM_FROM_START_OF_AUDIO_CLIP, "trimFromStartOfAudioClip",
 	                  RuntimeFeatureStateToggle::On);
 
-<<<<<<< HEAD
 	// MIDI CC64 sustain pedal
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::EnableSustainPedal],
 	                  STRING_FOR_COMMUNITY_FEATURE_SUSTAIN_PEDAL, "enableSustainPedal", RuntimeFeatureStateToggle::Off);
@@ -209,12 +208,11 @@ void RuntimeFeatureSettings::init() {
 	// MIDI CC67 soft pedal
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::EnableSoftPedal], STRING_FOR_COMMUNITY_FEATURE_SOFT_PEDAL,
 	                  "enableSoftPedal", RuntimeFeatureStateToggle::Off);
-=======
+
 	// Swap tempo and select encoders (accessibility)
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::SwapTempoAndSelectEncoders],
 	                  STRING_FOR_COMMUNITY_FEATURE_SWAP_ENCODERS, "swapTempoAndSelectEncoders",
 	                  RuntimeFeatureStateToggle::Off);
->>>>>>> feature/swap-select-tempo-encoders
 }
 
 void RuntimeFeatureSettings::readSettingsFromFile() {
