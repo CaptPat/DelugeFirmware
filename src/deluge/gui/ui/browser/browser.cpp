@@ -1274,11 +1274,21 @@ gotErrorAfterAllocating:
 		}
 		goto notFound;
 	}
+<<<<<<< HEAD
 	else {
 		i--;
 		// If it didn't match exactly, try some other stuff before accepting that result.
 		if (memcasecmp(((FileItem*)fileItems.getElementAddress(i))->displayName, enteredText.get(),
 		               enteredTextEditPos)) {
+=======
+
+	i--;
+	{
+		FileItem* fileItem = (FileItem*)fileItems.getElementAddress(i);
+
+		// If it didn't match exactly, that's ok, but we need to try some other stuff before we accept that result.
+		if (memcasecmp(fileItem->displayName, enteredText.get(), enteredTextEditPos)) {
+>>>>>>> bugfix/browser-text-search-last-item
 			if (numExtraZeroesAdded < 4) {
 				error = searchString.concatenateAtPos("0", searchString.getLength() - 1, 1);
 				if (error != Error::NONE) {
@@ -1291,9 +1301,34 @@ gotErrorAfterAllocating:
 			else {
 				goto notFound;
 			}
+<<<<<<< HEAD
+=======
 		}
+
+		fileIndexSelected = i;
+
+		// Move scroll only if found item is completely offscreen.
+		if (display->have7SEG() || scrollPosVertical > i || scrollPosVertical < i - (OLED_HEIGHT_CHARS - 1) + 1) {
+			scrollPosVertical = i;
+>>>>>>> bugfix/browser-text-search-last-item
+		}
+
+		error = setEnteredTextFromCurrentFilename();
+		if (error != Error::NONE) {
+			goto gotError;
+		}
+
+		displayText();
+
+		// If we're now on a different file than before, preview it
+		if (fileItem->filePointer.sclust != oldClust) {
+			currentFileChanged(0);
+		}
+
+		return true;
 	}
 
+<<<<<<< HEAD
 	{
 		FileItem* fileItem = (FileItem*)fileItems.getElementAddress(i);
 		fileIndexSelected = i;
@@ -1318,6 +1353,8 @@ gotErrorAfterAllocating:
 		return true;
 	}
 
+=======
+>>>>>>> bugfix/browser-text-search-last-item
 notFound:
 	if (display->haveOLED() && !mayDefaultToBrandNewNameOnEntry) {
 		if (fileIndexSelected >= 0) {
