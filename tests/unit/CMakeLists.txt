@@ -75,6 +75,7 @@ add_executable(UnitTests
         browser_search_tests.cpp
         envelope_tests.cpp
         filter_morph_label_tests.cpp
+        notes_state_tests.cpp
 )
 add_test(NAME UnitTests
         COMMAND UnitTests)
