@@ -73,6 +73,7 @@ add_executable(UnitTests
         chord_tests.cpp
         time_tests.cpp
         browser_search_tests.cpp
+        envelope_tests.cpp
 )
 add_test(NAME UnitTests
         COMMAND UnitTests)
