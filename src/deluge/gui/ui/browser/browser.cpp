@@ -1274,11 +1274,13 @@ gotErrorAfterAllocating:
 		}
 		goto notFound;
 	}
-	else {
-		i--;
-		// If it didn't match exactly, try some other stuff before accepting that result.
-		if (memcasecmp(((FileItem*)fileItems.getElementAddress(i))->displayName, enteredText.get(),
-		               enteredTextEditPos)) {
+
+	i--;
+	{
+		FileItem* fileItem = (FileItem*)fileItems.getElementAddress(i);
+
+		// If it didn't match exactly, that's ok, but we need to try some other stuff before we accept that result.
+		if (memcasecmp(fileItem->displayName, enteredText.get(), enteredTextEditPos)) {
 			if (numExtraZeroesAdded < 4) {
 				error = searchString.concatenateAtPos("0", searchString.getLength() - 1, 1);
 				if (error != Error::NONE) {
@@ -1292,10 +1294,7 @@ gotErrorAfterAllocating:
 				goto notFound;
 			}
 		}
-	}
 
-	{
-		FileItem* fileItem = (FileItem*)fileItems.getElementAddress(i);
 		fileIndexSelected = i;
 
 		// Move scroll only if found item is completely offscreen.
