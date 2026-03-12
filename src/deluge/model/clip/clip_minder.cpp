@@ -17,13 +17,16 @@
 
 #include "model/clip/clip_minder.h"
 #include "definitions_cxx.hpp"
+#ifndef IN_UNIT_TESTS
 #include "gui/views/arranger_view.h"
 #include "gui/views/session_view.h"
+#endif
 
 ActionResult ClipMinder::buttonAction(deluge::hid::Button b, bool on) {
 	return ActionResult::NOT_DEALT_WITH;
 }
 
+#ifndef IN_UNIT_TESTS
 /// Called by button action of active clip view when b == SESSION_VIEW
 void ClipMinder::transitionToArrangerOrSession() {
 	// should we transition to Arranger View?
@@ -37,3 +40,4 @@ void ClipMinder::transitionToArrangerOrSession() {
 	// if we didn't transition to arranger, then transition to Session View
 	sessionView.transitionToSessionView();
 }
+#endif
