@@ -68,6 +68,7 @@ enum RuntimeFeatureSettingType : uint32_t {
 	EnableSustainPedal,
 	EnableSostenutoPedal,
 	EnableSoftPedal,
+	SwapTempoAndSelectEncoders,
 	MaxElement // Keep as boundary
 };
 

@@ -546,6 +546,7 @@ PLACE_SDRAM_DATA Language english{
         {STRING_FOR_COMMUNITY_FEATURE_SUSTAIN_PEDAL, "Sustain Pedal (CC64)"},
         {STRING_FOR_COMMUNITY_FEATURE_SOSTENUTO_PEDAL, "Sostenuto Pedal (CC66)"},
         {STRING_FOR_COMMUNITY_FEATURE_SOFT_PEDAL, "Soft Pedal (CC67)"},
+        {STRING_FOR_COMMUNITY_FEATURE_SWAP_ENCODERS, "Swap Tempo And Select Encoders"},
         {STRING_FOR_TRACK_STILL_HAS_CLIPS_IN_SESSION, "Track still has clips in session"},
         {STRING_FOR_DELETE_ALL_TRACKS_CLIPS_FIRST, "Delete all track's clips first"},
         {STRING_FOR_CANT_DELETE_FINAL_CLIP, "Can't delete final Clip"},

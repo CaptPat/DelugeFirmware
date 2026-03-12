@@ -52,6 +52,7 @@ SettingToggle menuTrimFromStartOfAudioClip(RuntimeFeatureSettingType::TrimFromSt
 SettingToggle menuEnableSustainPedal(RuntimeFeatureSettingType::EnableSustainPedal);
 SettingToggle menuEnableSostenutoPedal(RuntimeFeatureSettingType::EnableSostenutoPedal);
 SettingToggle menuEnableSoftPedal(RuntimeFeatureSettingType::EnableSoftPedal);
+SettingToggle menuSwapTempoAndSelectEncoders(RuntimeFeatureSettingType::SwapTempoAndSelectEncoders);
 
 std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettings> subMenuEntries{
     &menuDrumRandomizer,
@@ -78,7 +79,8 @@ std::array<MenuItem*, RuntimeFeatureSettingType::MaxElement - kNonTopLevelSettin
     &menuTrimFromStartOfAudioClip,
     &menuEnableSustainPedal,
     &menuEnableSostenutoPedal,
-    &menuEnableSoftPedal};
+    &menuEnableSoftPedal,
+    &menuSwapTempoAndSelectEncoders};
 
 Settings::Settings(l10n::String name, l10n::String title) : menu_item::Submenu(name, title, subMenuEntries) {
 }
