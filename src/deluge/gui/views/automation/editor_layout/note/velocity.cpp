@@ -156,8 +156,15 @@ void AutomationEditorLayoutNoteVelocity::velocityEditPadAction(ModelStackWithNot
 	bool refreshVelocityEditor = false;
 	bool showNewVelocity = true;
 
-	// check for middle or multi pad press
-	if (velocity && squareInfo.numNotes != 0 && instrumentClipView.numEditPadPresses == 1) {
+	// If pressing at the velocity head (pad y matches note's current velocity), this is a delete-intent press.
+	// Skip multi-pad ramp logic so each such press is registered independently for deletion on short release.
+	bool isVelocityHeadPress = velocity && squareInfo.numNotes != 0
+	                           && minPadDisplayValues[y] <= squareInfo.averageVelocity
+	                           && squareInfo.averageVelocity <= maxPadDisplayValues[y];
+
+	// check for middle or multi pad press (but not for velocity-head presses, which are delete-intent)
+	if (velocity && squareInfo.numNotes != 0 && instrumentClipView.numEditPadPresses == 1
+	    && !isVelocityHeadPress) {
 		// Find that original press
 		for (int32_t i = 0; i < kEditPadPressBufferSize; i++) {
 			if (instrumentClipView.editPadPresses[i].isActive) {
@@ -443,6 +450,13 @@ void AutomationEditorLayoutNoteVelocity::setVelocityRamp(ModelStackWithNoteRow* 
 	Action* action = actionLogger.getNewAction(ActionType::NOTE_EDIT, ActionAddition::ALLOWED);
 	if (!action) {
 		return;
+	}
+
+	// Clear deleteOnDepress for all active presses so releasing after a ramp doesn't accidentally delete notes
+	for (int32_t i = 0; i < kEditPadPressBufferSize; i++) {
+		if (instrumentClipView.editPadPresses[i].isActive) {
+			instrumentClipView.editPadPresses[i].deleteOnDepress = false;
+		}
 	}
 
 	int32_t startVelocity = getVelocityFromY(getLeftPadSelectedY());
