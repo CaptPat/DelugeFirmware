@@ -1070,6 +1070,219 @@ void AutomationView::renderAutomationOverviewDisplay7SEG(Output* output, OutputT
 	display->setScrollingText(overviewText);
 }
 
+void AutomationView::renderAutomationEditorDisplay7SEG(Clip* clip, OutputType outputType, int32_t knobPosLeft,
+                                                       bool modEncoderAction) {
+	char modelStackMemory[MODEL_STACK_MAX_SIZE];
+	ModelStackWithTimelineCounter* modelStack = currentSong->setupModelStackWithCurrentClip(modelStackMemory);
+	ModelStackWithAutoParam* modelStackWithParam = nullptr;
+
+	if (onArrangerView) {
+		ModelStackWithThreeMainThings* modelStackWithThreeMainThings =
+		    currentSong->setupModelStackWithSongAsTimelineCounter(modelStackMemory);
+
+		modelStackWithParam =
+		    currentSong->getModelStackWithParam(modelStackWithThreeMainThings, currentSong->lastSelectedParamID);
+	}
+	else {
+		modelStackWithParam = getModelStackWithParamForClip(modelStack, clip);
+	}
+
+	bool padSelected = (!padSelectionOn && isUIModeActive(UI_MODE_NOTES_PRESSED)) || padSelectionOn;
+
+	/* check if you're holding a pad
+	 * if yes, store pad press knob position in lastPadSelectedKnobPos
+	 * so that it can be used next time as the knob position if returning here
+	 * to display parameter value after another popup has been cancelled (e.g. audition pad)
+	 */
+	if (padSelected) {
+		if (knobPosLeft != kNoSelection) {
+			lastPadSelectedKnobPos = knobPosLeft;
+		}
+		else if (lastPadSelectedKnobPos != kNoSelection) {
+			params::Kind lastSelectedParamKind = params::Kind::NONE;
+			int32_t lastSelectedParamID = kNoSelection;
+			if (onArrangerView) {
+				lastSelectedParamKind = currentSong->lastSelectedParamKind;
+				lastSelectedParamID = currentSong->lastSelectedParamID;
+			}
+			else {
+				lastSelectedParamKind = clip->lastSelectedParamKind;
+				lastSelectedParamID = clip->lastSelectedParamID;
+			}
+			knobPosLeft =
+			    view.calculateKnobPosForDisplay(lastSelectedParamKind, lastSelectedParamID, lastPadSelectedKnobPos);
+		}
+	}
+
+	bool isAutomated =
+	    modelStackWithParam && modelStackWithParam->autoParam && modelStackWithParam->autoParam->isAutomated();
+	bool playbackStarted = playbackHandler.isEitherClockActive();
+
+	// display parameter value if knobPos is provided
+	if ((knobPosLeft != kNoSelection) && (padSelected || (playbackStarted && isAutomated) || modEncoderAction)) {
+		char buffer[5];
+		intToString(knobPosLeft, buffer);
+		if (modEncoderAction && !padSelected) {
+			display->displayPopup(buffer, 3, true);
+		}
+		else {
+			display->setText(buffer, true, 255, false);
+		}
+	}
+	// display parameter name
+	else if (knobPosLeft == kNoSelection) {
+		DEF_STACK_STRING_BUF(parameterName, 30);
+		getAutomationParameterName(clip, outputType, parameterName);
+		// if playback is running and there is automation, the screen will display the
+		// current automation value at the playhead position
+		// when changing to a parameter with automation, flash the parameter name first
+		// before the value is displayed
+		// otherwise if there's no automation, just scroll the parameter name
+		if (padSelected || (playbackStarted && isAutomated)) {
+			display->displayPopup(parameterName.c_str(), 3, true, isAutomated ? 3 : 255);
+		}
+		else {
+			display->setScrollingText(parameterName.c_str(), 0, 600, -1, isAutomated ? 3 : 255);
+		}
+	}
+}
+
+void AutomationView::renderNoteEditorDisplay7SEG(InstrumentClip* clip, OutputType outputType, int32_t knobPosLeft) {
+	char modelStackMemory[MODEL_STACK_MAX_SIZE];
+	ModelStackWithTimelineCounter* modelStack = currentSong->setupModelStackWithCurrentClip(modelStackMemory);
+	bool isKit = outputType == OutputType::KIT;
+
+	ModelStackWithNoteRow* modelStackWithNoteRow = clip->getNoteRowOnScreen(instrumentClipView.lastAuditionedYDisplay,
+	                                                                        modelStack); // don't create
+	if (!modelStackWithNoteRow->getNoteRowAllowNull()) {
+		if (!isKit) {
+			modelStackWithNoteRow =
+			    instrumentClipView.createNoteRowForYDisplay(modelStack, instrumentClipView.lastAuditionedYDisplay);
+		}
+	}
+
+	if (knobPosLeft != kNoSelection) {
+		char buffer[5];
+		intToString(knobPosLeft, buffer);
+		display->setText(buffer, true, 255, false);
+	}
+	else {
+		// display note / drum name
+		char noteRowName[50];
+		if (modelStackWithNoteRow->getNoteRowAllowNull()) {
+			if (isKit) {
+				DEF_STACK_STRING_BUF(drumName, 50);
+				instrumentClipView.getDrumName(modelStackWithNoteRow->getNoteRow()->drum, drumName);
+				strncpy(noteRowName, drumName.c_str(), 49);
+			}
+			else {
+				int32_t isNatural = 1; // gets modified inside noteCodeToString to be 0 if sharp.
+				noteCodeToString(modelStackWithNoteRow->getNoteRow()->getNoteCode(), noteRowName, &isNatural);
+			}
+		}
+		else {
+			if (isKit) {
+				strncpy(noteRowName, "(Select Drum)", 49);
+			}
+			else {
+				strncpy(noteRowName, "(Select Note)", 49);
+			}
+		}
+		display->setScrollingText(noteRowName);
+	}
+}
+
+// get's the name of the Parameter being edited so it can be displayed on the screen
+void AutomationView::getAutomationParameterName(Clip* clip, OutputType outputType, StringBuf& parameterName) {
+	if (onArrangerView || outputType != OutputType::MIDI_OUT) {
+		params::Kind lastSelectedParamKind = params::Kind::NONE;
+		int32_t lastSelectedParamID = kNoSelection;
+		PatchSource lastSelectedPatchSource = PatchSource::NONE;
+		if (onArrangerView) {
+			lastSelectedParamKind = currentSong->lastSelectedParamKind;
+			lastSelectedParamID = currentSong->lastSelectedParamID;
+		}
+		else {
+			lastSelectedParamKind = clip->lastSelectedParamKind;
+			lastSelectedParamID = clip->lastSelectedParamID;
+			lastSelectedPatchSource = clip->lastSelectedPatchSource;
+		}
+		if (lastSelectedParamKind == params::Kind::PATCH_CABLE) {
+			PatchSource source2 = PatchSource::NONE;
+			ParamDescriptor paramDescriptor;
+			paramDescriptor.data = lastSelectedParamID;
+			if (!paramDescriptor.hasJustOneSource()) {
+				source2 = paramDescriptor.getTopLevelSource();
+			}
+
+			parameterName.append(sourceToStringShort(lastSelectedPatchSource));
+
+			if (display->haveOLED()) {
+				parameterName.append(" -> ");
+			}
+			else {
+				parameterName.append(" - ");
+			}
+
+			if (source2 != PatchSource::NONE) {
+				parameterName.append(sourceToStringShort(source2));
+				parameterName.append(display->haveOLED() ? " -> " : " - ");
+			}
+
+			auto* mc = (ModControllableAudio*)view.activeModControllableModelStack.modControllable;
+			parameterName.append(params::getPatchedParamShortName(lastSelectedParamID, mc));
+		}
+		else {
+			auto* mc = (ModControllableAudio*)view.activeModControllableModelStack.modControllable;
+			parameterName.append(getParamDisplayName(lastSelectedParamKind, lastSelectedParamID, mc));
+		}
+	}
+	else {
+		if (clip->lastSelectedParamID == CC_NUMBER_NONE) {
+			parameterName.append(deluge::l10n::get(deluge::l10n::String::STRING_FOR_NO_PARAM));
+		}
+		else if (clip->lastSelectedParamID == CC_NUMBER_PITCH_BEND) {
+			parameterName.append(deluge::l10n::get(deluge::l10n::String::STRING_FOR_PITCH_BEND));
+		}
+		else if (clip->lastSelectedParamID == CC_NUMBER_AFTERTOUCH) {
+			parameterName.append(deluge::l10n::get(deluge::l10n::String::STRING_FOR_CHANNEL_PRESSURE));
+		}
+		else if (clip->lastSelectedParamID == CC_EXTERNAL_MOD_WHEEL || clip->lastSelectedParamID == CC_NUMBER_Y_AXIS) {
+			parameterName.append(deluge::l10n::get(deluge::l10n::String::STRING_FOR_MOD_WHEEL));
+		}
+		else {
+			MIDIInstrument* midiInstrument = (MIDIInstrument*)clip->output;
+			bool appendedName = false;
+
+			if (clip->lastSelectedParamID >= 0 && clip->lastSelectedParamID < kNumRealCCNumbers) {
+				std::string_view name = midiInstrument->getNameFromCC(clip->lastSelectedParamID);
+				// if we have a name for this midi cc set by the user, display that instead of the cc number
+				if (!name.empty()) {
+					parameterName.append(name.data());
+					appendedName = true;
+				}
+			}
+
+			// if we don't have a midi cc name set, draw CC number instead
+			if (!appendedName) {
+				if (display->haveOLED()) {
+					parameterName.append("CC ");
+					parameterName.appendInt(clip->lastSelectedParamID);
+				}
+				else {
+					if (clip->lastSelectedParamID < 100) {
+						parameterName.append("CC");
+					}
+					else {
+						parameterName.append("C");
+					}
+					parameterName.appendInt(clip->lastSelectedParamID);
+				}
+			}
+		}
+	}
+}
+
 // adjust the LED meters and update the display
 
 /*updated function for displaying automation when playback is enabled (called from ui_timer_manager).
