@@ -208,6 +208,11 @@ void RuntimeFeatureSettings::init() {
 	// MIDI CC67 soft pedal
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::EnableSoftPedal], STRING_FOR_COMMUNITY_FEATURE_SOFT_PEDAL,
 	                  "enableSoftPedal", RuntimeFeatureStateToggle::Off);
+
+	// Swap tempo and select encoders (accessibility)
+	SetupOnOffSetting(settings[RuntimeFeatureSettingType::SwapTempoAndSelectEncoders],
+	                  STRING_FOR_COMMUNITY_FEATURE_SWAP_ENCODERS, "swapTempoAndSelectEncoders",
+	                  RuntimeFeatureStateToggle::Off);
 }
 
 void RuntimeFeatureSettings::readSettingsFromFile() {

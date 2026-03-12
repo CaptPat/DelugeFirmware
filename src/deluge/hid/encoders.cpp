@@ -124,6 +124,16 @@ bool interpretEncoders(bool skipActioning) {
 
 			ActionResult result;
 
+			// Swap select and tempo encoders if accessibility setting is enabled
+			if (runtimeFeatureSettings.isOn(RuntimeFeatureSettingType::SwapTempoAndSelectEncoders)) {
+				if (name == EncoderName::TEMPO) {
+					name = EncoderName::SELECT;
+				}
+				else if (name == EncoderName::SELECT) {
+					name = EncoderName::TEMPO;
+				}
+			}
+
 			switch (name) {
 
 			case EncoderName::SCROLL_X:
