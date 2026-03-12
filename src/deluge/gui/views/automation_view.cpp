@@ -2208,6 +2208,549 @@ void AutomationView::handleParameterSelection(Clip* clip, Output* output, Output
 	}
 }
 
+// note edit pad action
+// handles single and multi pad presses for note parameter editing (e.g. velocity)
+// stores pad presses in the EditPadPresses struct of the instrument clip view
+void AutomationView::noteEditPadAction(ModelStackWithNoteRow* modelStackWithNoteRow, NoteRow* noteRow,
+                                       InstrumentClip* clip, int32_t x, int32_t y, int32_t velocity,
+                                       int32_t effectiveLength, SquareInfo& squareInfo) {
+	if (automationParamType == AutomationParamType::NOTE_VELOCITY) {
+		velocityEditPadAction(modelStackWithNoteRow, noteRow, clip, x, y, velocity, effectiveLength, squareInfo);
+	}
+}
+
+// velocity edit pad action
+void AutomationView::velocityEditPadAction(ModelStackWithNoteRow* modelStackWithNoteRow, NoteRow* noteRow,
+                                           InstrumentClip* clip, int32_t x, int32_t y, int32_t velocity,
+                                           int32_t effectiveLength, SquareInfo& squareInfo) {
+	// save pad selected
+	leftPadSelectedX = x;
+
+	// calculate new velocity based on Y of pad pressed
+	int32_t newVelocity = getVelocityFromY(y);
+
+	// middle pad press variables
+	middlePadPressSelected = false;
+
+	// multi pad press variables
+	multiPadPressSelected = false;
+	SquareInfo rowSquareInfo[kDisplayWidth];
+	int32_t multiPadPressVelocityIncrement = 0;
+
+	// update velocity editor rendering
+	bool refreshVelocityEditor = false;
+	bool showNewVelocity = true;
+
+	// If pressing at the velocity head (pad y matches note's current velocity), this is a delete-intent press.
+	// Skip multi-pad ramp logic so each such press is registered independently for deletion on short release.
+	bool isVelocityHeadPress = velocity && squareInfo.numNotes != 0
+	                           && nonPatchCableMinPadDisplayValues[y] <= squareInfo.averageVelocity
+	                           && squareInfo.averageVelocity <= nonPatchCableMaxPadDisplayValues[y];
+
+	// check for middle or multi pad press (but not for velocity-head presses, which are delete-intent)
+	if (velocity && squareInfo.numNotes != 0 && instrumentClipView.numEditPadPresses == 1 && !isVelocityHeadPress) {
+		// Find that original press
+		for (int32_t i = 0; i < kEditPadPressBufferSize; i++) {
+			if (instrumentClipView.editPadPresses[i].isActive) {
+				// if found, calculate middle velocity between two velocity pad presses
+				if (instrumentClipView.editPadPresses[i].xDisplay == x) {
+					// the last pad press will have updated the default velocity
+					// so get it as it will be used to calculate average between previous and new velocity
+					int32_t previousVelocity = getCurrentInstrument()->defaultVelocity;
+
+					// calculate middle velocity (average of two pad presses in a column)
+					newVelocity = (newVelocity + previousVelocity) / 2;
+
+					// update middle pad press selection indicator
+					middlePadPressSelected = true;
+
+					break;
+				}
+				// found a second press that isn't in the same column as the first press
+				else {
+					int32_t firstPadX = instrumentClipView.editPadPresses[i].xDisplay;
+
+					// get note info on all the squares in the note row
+					noteRow->getRowSquareInfo(effectiveLength, rowSquareInfo);
+
+					// the long press logic calculates and renders the interpolation as if the press was
+					// entered in a forward fashion (where the first pad is to the left of the second
+					// pad). if the user happens to enter a long press backwards then we fix that entry
+					// by re-ordering the pad presses so that it is forward again
+					leftPadSelectedX = firstPadX > x ? x : firstPadX;
+					rightPadSelectedX = firstPadX > x ? firstPadX : x;
+
+					int32_t numSquares = 0;
+					// find total number of notes in note row (excluding the first note)
+					for (int32_t i = leftPadSelectedX; i <= rightPadSelectedX; i++) {
+						// don't include note tails in note count
+						if (rowSquareInfo[i].numNotes != 0 && rowSquareInfo[i].squareType != SQUARE_NOTE_TAIL) {
+							numSquares++;
+						}
+					}
+
+					//	DEF_STACK_STRING_BUF(numSquare, 50);
+					//	numSquare.append("Squares: ");
+					//	numSquare.appendInt(numSquares);
+					//	numSquare.append("\n");
+
+					// calculate start and end velocity for long press
+					int32_t leftPadSelectedVelocity;
+					int32_t rightPadSelectedVelocity;
+
+					if (leftPadSelectedX == firstPadX) { // then left pad is the first press
+						leftPadSelectedVelocity = rowSquareInfo[leftPadSelectedX].averageVelocity;
+						leftPadSelectedY = getYFromVelocity(leftPadSelectedVelocity);
+						rightPadSelectedVelocity = getVelocityFromY(y);
+						rightPadSelectedY = y;
+					}
+					else { // then left pad is the second press
+						leftPadSelectedVelocity = getVelocityFromY(y);
+						leftPadSelectedY = y;
+						rightPadSelectedVelocity = rowSquareInfo[rightPadSelectedX].averageVelocity;
+						rightPadSelectedY = getYFromVelocity(rightPadSelectedVelocity);
+					}
+
+					//	numSquare.append("L: ");
+					//	numSquare.appendInt(leftPadSelectedVelocity);
+					//	numSquare.append(" R: ");
+					//	numSquare.appendInt(rightPadSelectedVelocity);
+					//	numSquare.append("\n");
+
+					// calculate increment from first pad to last pad
+					float multiPadPressVelocityIncrementFloat =
+					    static_cast<float>((rightPadSelectedVelocity - leftPadSelectedVelocity)) / (numSquares - 1);
+					multiPadPressVelocityIncrement =
+					    static_cast<int32_t>(std::round(multiPadPressVelocityIncrementFloat));
+					// if ramp is upwards, make increment positive
+					if (leftPadSelectedVelocity < rightPadSelectedVelocity) {
+						multiPadPressVelocityIncrement = std::abs(multiPadPressVelocityIncrement);
+					}
+
+					//	numSquare.append("Inc: ");
+					//	numSquare.appendInt(multiPadPressVelocityIncrement);
+					//	display->displayPopup(numSquare.c_str());
+
+					// update multi pad press selection indicator
+					multiPadPressSelected = true;
+					multiPadPressActive = true;
+
+					break;
+				}
+			}
+		}
+	}
+
+	// if middle pad press was selected, set the velocity to middle velocity between two pads pressed
+	if (middlePadPressSelected) {
+		setVelocity(modelStackWithNoteRow, noteRow, x, newVelocity);
+		refreshVelocityEditor = true;
+	}
+	// if multi pad (long) press was selected, set the velocity of all the notes between the two pad presses
+	else if (multiPadPressSelected) {
+		setVelocityRamp(modelStackWithNoteRow, noteRow, rowSquareInfo, multiPadPressVelocityIncrement);
+		refreshVelocityEditor = true;
+	}
+	// otherwise, it's a regular velocity pad action
+	else {
+		// no existing notes in square pressed
+		// add note and set velocity
+		if (squareInfo.numNotes == 0) {
+			addNoteWithNewVelocity(x, velocity, newVelocity);
+			refreshVelocityEditor = true;
+		}
+		// pressing pad corresponding to note's current averageVelocity, remove note
+		else if (nonPatchCableMinPadDisplayValues[y] <= squareInfo.averageVelocity
+		         && squareInfo.averageVelocity <= nonPatchCableMaxPadDisplayValues[y]) {
+			recordNoteEditPadAction(x, velocity);
+			refreshVelocityEditor = true;
+			showNewVelocity = false;
+		}
+		// note(s) exists, adjust velocity of existing notes
+		else {
+			adjustNoteVelocity(modelStackWithNoteRow, noteRow, x, velocity, newVelocity, squareInfo.squareType);
+			refreshVelocityEditor = true;
+		}
+	}
+	// if no note exists and you're trying to remove a note (y == 0 && squareInfo.numNotes == 0),
+	// well no need to do anything
+
+	if (multiPadPressActive && !isUIModeActive(UI_MODE_NOTES_PRESSED)) {
+		multiPadPressActive = false;
+	}
+
+	if (refreshVelocityEditor) {
+		// refresh grid and update default velocity on the display
+		uiNeedsRendering(this, 0xFFFFFFFF, 0);
+		// if holding a multi pad press, render left and right velocity of the multi pad press
+		if (multiPadPressActive) {
+			int32_t leftPadSelectedVelocity = getVelocityFromY(leftPadSelectedY);
+			int32_t rightPadSelectedVelocity = getVelocityFromY(rightPadSelectedY);
+			if (display->haveOLED()) {
+				renderDisplay(leftPadSelectedVelocity, rightPadSelectedVelocity);
+			}
+			else {
+				// for 7seg, render value of last pad pressed
+				renderDisplay(leftPadSelectedX == x ? leftPadSelectedVelocity : rightPadSelectedVelocity);
+			}
+		}
+		else {
+			if (velocity) {
+				renderDisplay(showNewVelocity ? newVelocity : squareInfo.averageVelocity);
+			}
+			else {
+				renderDisplay();
+			}
+		}
+	}
+}
+
+// convert y of pad press into velocity value between 1 and 127
+int32_t AutomationView::getVelocityFromY(int32_t y) {
+	int32_t velocity = std::clamp<int32_t>(nonPatchCablePadPressValues[y], 1, 127);
+	return velocity;
+}
+
+// convert velocity of a square into y
+int32_t AutomationView::getYFromVelocity(int32_t velocity) {
+	for (int32_t i = 0; i < kDisplayHeight; i++) {
+		if (nonPatchCableMinPadDisplayValues[i] <= velocity && velocity <= nonPatchCableMaxPadDisplayValues[i]) {
+			return i;
+		}
+	}
+	return kNoSelection;
+}
+
+// add note and set velocity
+void AutomationView::addNoteWithNewVelocity(int32_t x, int32_t velocity, int32_t newVelocity) {
+	if (velocity) {
+		// we change the instrument default velocity because it is used for new notes
+		getCurrentInstrument()->defaultVelocity = newVelocity;
+	}
+
+	// record pad press and release
+	// adds note with new velocity set
+	recordNoteEditPadAction(x, velocity);
+}
+
+// adjust velocity of existing notes
+void AutomationView::adjustNoteVelocity(ModelStackWithNoteRow* modelStackWithNoteRow, NoteRow* noteRow, int32_t x,
+                                        int32_t velocity, int32_t newVelocity, uint8_t squareType) {
+	if (velocity) {
+		// record pad press
+		recordNoteEditPadAction(x, velocity);
+
+		// adjust velocities of notes within pressed pad square
+		setVelocity(modelStackWithNoteRow, noteRow, x, newVelocity);
+	}
+	else {
+		// record pad release
+		recordNoteEditPadAction(x, velocity);
+	}
+}
+
+// set velocity of notes within pressed pad square
+void AutomationView::setVelocity(ModelStackWithNoteRow* modelStackWithNoteRow, NoteRow* noteRow, int32_t x,
+                                 int32_t newVelocity) {
+	Action* action = actionLogger.getNewAction(ActionType::NOTE_EDIT, ActionAddition::ALLOWED);
+	if (!action) {
+		return;
+	}
+
+	int32_t velocityValue = 0;
+
+	for (int32_t i = 0; i < kEditPadPressBufferSize; i++) {
+		bool foundPadPress = instrumentClipView.editPadPresses[i].isActive;
+
+		// if we found an active pad press and we're looking for a pad press with a specific xDisplay
+		// see if the active pad press is the one we are looking for
+		if (foundPadPress && (x != kNoSelection)) {
+			foundPadPress = (instrumentClipView.editPadPresses[i].xDisplay == x);
+		}
+
+		if (foundPadPress) {
+			instrumentClipView.editPadPresses[i].deleteOnDepress = false;
+
+			// Multiple notes in square
+			if (instrumentClipView.editPadPresses[i].isBlurredSquare) {
+
+				uint32_t velocitySumThisSquare = 0;
+				uint32_t numNotesThisSquare = 0;
+
+				int32_t noteI =
+				    noteRow->notes.search(instrumentClipView.editPadPresses[i].intendedPos, GREATER_OR_EQUAL);
+				Note* note = noteRow->notes.getElement(noteI);
+				while (note
+				       && note->pos - instrumentClipView.editPadPresses[i].intendedPos
+				              < instrumentClipView.editPadPresses[i].intendedLength) {
+					noteRow->changeNotesAcrossAllScreens(note->pos, modelStackWithNoteRow, action,
+					                                     CORRESPONDING_NOTES_SET_VELOCITY, newVelocity);
+
+					instrumentClipView.updateVelocityValue(velocityValue, note->getVelocity());
+
+					numNotesThisSquare++;
+					velocitySumThisSquare += note->getVelocity();
+
+					noteI++;
+					note = noteRow->notes.getElement(noteI);
+				}
+
+				// Rohan: Get the average. Ideally we'd have done this when first selecting the note too, but I
+				// didn't
+
+				// Sean: not sure how getting the average when first selecting the note would help because the
+				// average will change based on the velocity adjustment happening here.
+
+				// We're adjusting the intendedVelocity here because this is the velocity that is used to audition
+				// the pad press note so you can hear the velocity changes as you're holding the note down
+				instrumentClipView.editPadPresses[i].intendedVelocity = velocitySumThisSquare / numNotesThisSquare;
+			}
+
+			// Only one note in square
+			else {
+				// We're adjusting the intendedVelocity here because this is the velocity that is used to audition
+				// the pad press note so you can hear the velocity changes as you're holding the note down
+				instrumentClipView.editPadPresses[i].intendedVelocity = newVelocity;
+				noteRow->changeNotesAcrossAllScreens(instrumentClipView.editPadPresses[i].intendedPos,
+				                                     modelStackWithNoteRow, action, CORRESPONDING_NOTES_SET_VELOCITY,
+				                                     newVelocity);
+
+				instrumentClipView.updateVelocityValue(velocityValue,
+				                                       instrumentClipView.editPadPresses[i].intendedVelocity);
+			}
+		}
+	}
+
+	instrumentClipView.displayVelocity(velocityValue, 0);
+
+	instrumentClipView.reassessAllAuditionStatus();
+}
+
+// set velocity of notes between pressed squares
+void AutomationView::setVelocityRamp(ModelStackWithNoteRow* modelStackWithNoteRow, NoteRow* noteRow,
+                                     SquareInfo rowSquareInfo[kDisplayWidth], int32_t velocityIncrement) {
+	Action* action = actionLogger.getNewAction(ActionType::NOTE_EDIT, ActionAddition::ALLOWED);
+	if (!action) {
+		return;
+	}
+
+	// Clear deleteOnDepress for all active presses so releasing after a ramp doesn't accidentally delete notes
+	for (int32_t i = 0; i < kEditPadPressBufferSize; i++) {
+		if (instrumentClipView.editPadPresses[i].isActive) {
+			instrumentClipView.editPadPresses[i].deleteOnDepress = false;
+		}
+	}
+
+	int32_t startVelocity = getVelocityFromY(leftPadSelectedY);
+	int32_t velocityValue = 0;
+	int32_t squaresProcessed = 0;
+
+	for (int32_t i = leftPadSelectedX; i <= rightPadSelectedX; i++) {
+		if (rowSquareInfo[i].numNotes != 0) {
+			int32_t intendedPos = rowSquareInfo[i].squareStartPos;
+
+			// Multiple notes in square
+			if (rowSquareInfo[i].numNotes > 1) {
+				int32_t intendedLength = rowSquareInfo[i].squareEndPos - intendedPos;
+
+				int32_t noteI = noteRow->notes.search(intendedPos, GREATER_OR_EQUAL);
+
+				Note* note = noteRow->notes.getElement(noteI);
+
+				while (note && note->pos - intendedPos < intendedLength) {
+					int32_t intendedVelocity =
+					    std::clamp<int32_t>(startVelocity + (velocityIncrement * squaresProcessed), 1, 127);
+
+					noteRow->changeNotesAcrossAllScreens(note->pos, modelStackWithNoteRow, action,
+					                                     CORRESPONDING_NOTES_SET_VELOCITY, intendedVelocity);
+
+					noteI++;
+
+					note = noteRow->notes.getElement(noteI);
+				}
+			}
+			// one note in square
+			else {
+				int32_t intendedVelocity =
+				    std::clamp<int32_t>(startVelocity + (velocityIncrement * squaresProcessed), 1, 127);
+
+				noteRow->changeNotesAcrossAllScreens(intendedPos, modelStackWithNoteRow, action,
+				                                     CORRESPONDING_NOTES_SET_VELOCITY, intendedVelocity);
+			}
+
+			// don't include note tails in note count
+			if (rowSquareInfo[i].squareType != SQUARE_NOTE_TAIL) {
+				squaresProcessed++;
+			}
+		}
+	}
+}
+
+// call instrument clip view edit pad action function to process velocity pad press actions
+void AutomationView::recordNoteEditPadAction(int32_t x, int32_t velocity) {
+	instrumentClipView.editPadAction(velocity, instrumentClipView.lastAuditionedYDisplay, x,
+	                                 currentSong->xZoom[NAVIGATION_CLIP]);
+}
+
+// automation edit pad action
+// handles single and multi pad presses for automation editing
+// stores pad presses in the EditPadPresses struct of the instrument clip view
+void AutomationView::automationEditPadAction(ModelStackWithAutoParam* modelStackWithParam, Clip* clip, int32_t xDisplay,
+                                             int32_t yDisplay, int32_t velocity, int32_t effectiveLength,
+                                             int32_t xScroll, int32_t xZoom) {
+	// If button down
+	if (velocity) {
+		// If this is a automation-length-edit press...
+		// needed for Automation
+		if (instrumentClipView.numEditPadPresses == 1) {
+
+			int32_t firstPadX = 255;
+			int32_t firstPadY = 255;
+
+			// Find that original press
+			int32_t i;
+			for (i = 0; i < kEditPadPressBufferSize; i++) {
+				if (instrumentClipView.editPadPresses[i].isActive) {
+
+					firstPadX = instrumentClipView.editPadPresses[i].xDisplay;
+					firstPadY = instrumentClipView.editPadPresses[i].yDisplay;
+
+					break;
+				}
+			}
+
+			if (firstPadX != 255 && firstPadY != 255) {
+				if (firstPadX != xDisplay) {
+					recordAutomationSinglePadPress(xDisplay, yDisplay);
+
+					multiPadPressSelected = true;
+					multiPadPressActive = true;
+
+					// the long press logic calculates and renders the interpolation as if the press was
+					// entered in a forward fashion (where the first pad is to the left of the second
+					// pad). if the user happens to enter a long press backwards then we fix that entry
+					// by re-ordering the pad presses so that it is forward again
+					leftPadSelectedX = firstPadX > xDisplay ? xDisplay : firstPadX;
+					leftPadSelectedY = firstPadX > xDisplay ? yDisplay : firstPadY;
+					rightPadSelectedX = firstPadX > xDisplay ? firstPadX : xDisplay;
+					rightPadSelectedY = firstPadX > xDisplay ? firstPadY : yDisplay;
+
+					// if you're not in pad selection mode, allow user to enter a long press
+					if (!padSelectionOn) {
+						handleAutomationMultiPadPress(modelStackWithParam, clip, leftPadSelectedX, leftPadSelectedY,
+						                              rightPadSelectedX, rightPadSelectedY, effectiveLength, xScroll,
+						                              xZoom);
+					}
+					else {
+						uiNeedsRendering(this);
+					}
+
+					// set led indicators to left / right pad selection values
+					// and update display
+					renderAutomationDisplayForMultiPadPress(modelStackWithParam, clip, effectiveLength, xScroll, xZoom,
+					                                        xDisplay);
+				}
+				else {
+					leftPadSelectedY = firstPadY;
+					middlePadPressSelected = true;
+					goto singlePadPressAction;
+				}
+			}
+		}
+
+		// Or, if this is a regular create-or-select press...
+		else {
+singlePadPressAction:
+			if (recordAutomationSinglePadPress(xDisplay, yDisplay)) {
+				multiPadPressActive = false;
+				handleAutomationSinglePadPress(modelStackWithParam, clip, xDisplay, yDisplay, effectiveLength, xScroll,
+				                               xZoom);
+			}
+		}
+	}
+
+	// Or if pad press ended...
+	else {
+		// Find the corresponding press, if there is one
+		int32_t i;
+		for (i = 0; i < kEditPadPressBufferSize; i++) {
+			if (instrumentClipView.editPadPresses[i].isActive
+			    && instrumentClipView.editPadPresses[i].yDisplay == yDisplay
+			    && instrumentClipView.editPadPresses[i].xDisplay == xDisplay) {
+				break;
+			}
+		}
+
+		// If we found it...
+		if (i < kEditPadPressBufferSize) {
+			instrumentClipView.endEditPadPress(i);
+
+			instrumentClipView.checkIfAllEditPadPressesEnded();
+		}
+
+		// outside pad selection mode, exit multi pad press once you've let go of the first pad in the
+		// long press
+		if (!padSelectionOn && multiPadPressSelected && (currentUIMode != UI_MODE_NOTES_PRESSED)) {
+			initPadSelection();
+		}
+		// switch from long press selection to short press selection in pad selection mode
+		else if (padSelectionOn && multiPadPressSelected && !multiPadPressActive
+		         && (currentUIMode != UI_MODE_NOTES_PRESSED)
+		         && ((AudioEngine::audioSampleTimer - instrumentClipView.timeLastEditPadPress) < kShortPressTime)) {
+
+			multiPadPressSelected = false;
+
+			leftPadSelectedX = xDisplay;
+			rightPadSelectedX = kNoSelection;
+
+			uiNeedsRendering(this);
+		}
+
+		if (currentUIMode != UI_MODE_NOTES_PRESSED) {
+			lastPadSelectedKnobPos = kNoSelection;
+			if (multiPadPressSelected) {
+				renderAutomationDisplayForMultiPadPress(modelStackWithParam, clip, effectiveLength, xScroll, xZoom,
+				                                        xDisplay);
+			}
+			else if (!padSelectionOn && !playbackHandler.isEitherClockActive()) {
+				displayAutomation();
+			}
+		}
+
+		middlePadPressSelected = false;
+	}
+}
+
+bool AutomationView::recordAutomationSinglePadPress(int32_t xDisplay, int32_t yDisplay) {
+	instrumentClipView.timeLastEditPadPress = AudioEngine::audioSampleTimer;
+	// Find an empty space in the press buffer, if there is one
+	int32_t i;
+	for (i = 0; i < kEditPadPressBufferSize; i++) {
+		if (!instrumentClipView.editPadPresses[i].isActive) {
+			break;
+		}
+	}
+	if (i < kEditPadPressBufferSize) {
+		instrumentClipView.shouldIgnoreVerticalScrollKnobActionIfNotAlsoPressedForThisNotePress = false;
+
+		// If this is the first press, record the time
+		if (instrumentClipView.numEditPadPresses == 0) {
+			instrumentClipView.timeFirstEditPadPress = AudioEngine::audioSampleTimer;
+			instrumentClipView.shouldIgnoreHorizontalScrollKnobActionIfNotAlsoPressedForThisNotePress = false;
+		}
+
+		instrumentClipView.editPadPresses[i].isActive = true;
+		instrumentClipView.editPadPresses[i].yDisplay = yDisplay;
+		instrumentClipView.editPadPresses[i].xDisplay = xDisplay;
+		instrumentClipView.numEditPadPresses++;
+		instrumentClipView.numEditPadPressesPerNoteRowOnScreen[yDisplay]++;
+		enterUIMode(UI_MODE_NOTES_PRESSED);
+
+		return true;
+	}
+	return false;
+}
+
 // called by pad action when pressing a pad in the mute column (x = kDisplayWidth)
 ActionResult AutomationView::handleMutePadAction(ModelStackWithTimelineCounter* modelStackWithTimelineCounter,
                                                  InstrumentClip* instrumentClip, Output* output, OutputType outputType,
