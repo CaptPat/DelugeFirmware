@@ -79,6 +79,7 @@ add_executable(UnitTests
         reverb_filter_roundtrip_tests.cpp
         pedal_state_tests.cpp
         tempo_ratio_tests.cpp
+        time_signature_tests.cpp
 )
 add_test(NAME UnitTests
         COMMAND UnitTests)
