@@ -59,15 +59,7 @@ public:
 	                    q31_t reverbAmount);
 
 	void clearGrainFXBuffer();
-	void grainBufferStolen() {
-		grainBuffer = nullptr;
-		wrapsToShutdown = 0;
-		grainInitialized = false;
-		bufferFull = false;
-		for (auto& grain : grains) {
-			grain.length = 0;
-		}
-	}
+	void grainBufferStolen() { grainBuffer = nullptr; }
 
 private:
 	void setupGrainFX(int32_t grainRate, int32_t grainMix, int32_t grainDensity, int32_t pitchRandomness,
@@ -89,10 +81,10 @@ private:
 	bool grainLastTickCountIsZero;
 	bool grainInitialized;
 
-	Grain grains[8];
+	Grain grains[8]{};
 
 	int32_t wrapsToShutdown;
-	GrainBuffer* grainBuffer;
+	GrainBuffer* grainBuffer{};
 	int32_t _densityKnobPos{0};
 	int32_t _rateKnobPos{0};
 	int32_t _mixKnobPos{0};
