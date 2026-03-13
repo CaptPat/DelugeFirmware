@@ -291,6 +291,7 @@ void LoadSongUI::doQueueLoadNextSongIfAvailable(int8_t offset) {
 				    readFileItemsFromFolderAndMemory(currentSong, outputTypeToLoad, nullptr, enteredText.get(), nullptr,
 				                                     true, Availability::ANY, CATALOG_SEARCH_BOTH);
 				if (error != Error::NONE) {
+					fileIndexSelected = currentFileIndexSelected;
 					break;
 				}
 				fileIndexSelected = fileItems.search(enteredText.get()) + offset;
@@ -300,6 +301,7 @@ void LoadSongUI::doQueueLoadNextSongIfAvailable(int8_t offset) {
 					    readFileItemsFromFolderAndMemory(currentSong, outputTypeToLoad, nullptr, nullptr, nullptr, true,
 					                                     Availability::ANY, CATALOG_SEARCH_LEFT);
 					if (error != Error::NONE) {
+						fileIndexSelected = currentFileIndexSelected;
 						break;
 					}
 					fileIndexSelected = fileItems.getNumElements() - 1;
@@ -312,6 +314,7 @@ void LoadSongUI::doQueueLoadNextSongIfAvailable(int8_t offset) {
 					    readFileItemsFromFolderAndMemory(currentSong, outputTypeToLoad, nullptr, nullptr, nullptr, true,
 					                                     Availability::ANY, CATALOG_SEARCH_LEFT);
 					if (error != Error::NONE) {
+						fileIndexSelected = currentFileIndexSelected;
 						break;
 					}
 				}
@@ -325,6 +328,7 @@ void LoadSongUI::doQueueLoadNextSongIfAvailable(int8_t offset) {
 				    readFileItemsFromFolderAndMemory(currentSong, outputTypeToLoad, nullptr, enteredText.get(), nullptr,
 				                                     true, Availability::ANY, CATALOG_SEARCH_BOTH);
 				if (error != Error::NONE) {
+					fileIndexSelected = currentFileIndexSelected;
 					break;
 				}
 				fileIndexSelected = fileItems.search(enteredText.get()) + offset;
@@ -334,6 +338,7 @@ void LoadSongUI::doQueueLoadNextSongIfAvailable(int8_t offset) {
 					    readFileItemsFromFolderAndMemory(currentSong, outputTypeToLoad, nullptr, nullptr, nullptr, true,
 					                                     Availability::ANY, CATALOG_SEARCH_RIGHT);
 					if (error != Error::NONE) {
+						fileIndexSelected = currentFileIndexSelected;
 						break;
 					}
 					fileIndexSelected = 0;
@@ -346,6 +351,7 @@ void LoadSongUI::doQueueLoadNextSongIfAvailable(int8_t offset) {
 					    readFileItemsFromFolderAndMemory(currentSong, outputTypeToLoad, nullptr, nullptr, nullptr, true,
 					                                     Availability::ANY, CATALOG_SEARCH_RIGHT);
 					if (error != Error::NONE) {
+						fileIndexSelected = currentFileIndexSelected;
 						break;
 					}
 				}
@@ -353,25 +359,25 @@ void LoadSongUI::doQueueLoadNextSongIfAvailable(int8_t offset) {
 			}
 		}
 
+		FileItem* currentFileItem = getCurrentFileItem();
+		if (currentFileItem == nullptr) {
+			fileIndexSelected = currentFileIndexSelected;
+			break;
+		}
 		setEnteredTextFromCurrentFilename();
 
-		FileItem* currentFileItem = getCurrentFileItem();
-
-		if (currentFileItem != nullptr) {
-			// Check if it's a directory...
-			if (currentFileItem->isFolder) {
-				// it is a folder
-				// scroll to the next item
-				continue;
-			}
-			else {
-				// if is a file, select it
-				songFound = true;
-				AudioEngine::logAction("performLoad");
-				performLoad();
-				if (FlashStorage::defaultStartupSongMode == StartupSongMode::LASTOPENED) {
-					runtimeFeatureSettings.writeSettingsToFile();
-				}
+		// Check if it's a directory...
+		if (currentFileItem->isFolder) {
+			// scroll to the next item
+			continue;
+		}
+		else {
+			// if is a file, select it
+			songFound = true;
+			AudioEngine::logAction("performLoad");
+			performLoad();
+			if (FlashStorage::defaultStartupSongMode == StartupSongMode::LASTOPENED) {
+				runtimeFeatureSettings.writeSettingsToFile();
 			}
 		}
 	} while (currentFileIndexSelected != fileIndexSelected && !songFound);
