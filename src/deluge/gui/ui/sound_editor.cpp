@@ -669,15 +669,32 @@ void SoundEditor::goUpOneLevel() {
 	beginScreen(oldItem);
 }
 
+bool SoundEditor::exitUI() {
+	// Guard against re-entrant calls during SD operations. The BACK_MENU_EXIT timer
+	// can fire during yield() while settings are being saved, causing re-entrant
+	// FatFS access that corrupts shared buffers and crashes (upstream #3898).
+	if (sdRoutineLock) {
+		return false;
+	}
+	exitCompletely();
+	return true;
+}
+
 void SoundEditor::exitCompletely() {
 	if (inSettingsMenu()) {
 		// First, save settings
 
 		display->displayLoadingAnimationText("Saving settings");
 
+		// Lock SD routine to prevent concurrent FatFS access during settings writes.
+		// Without this, routineForSD() can fire mid-write causing a crash in
+		// disk_read/move_window/dir_find (see upstream #3898).
+		sdRoutineLock = true;
 		FlashStorage::writeSettings();
 		MIDIDeviceManager::writeDevicesToFile();
 		runtimeFeatureSettings.writeSettingsToFile();
+		sdRoutineLock = false;
+
 		display->removeWorkingAnimation();
 	}
 	else if (inNoteEditor()) {
