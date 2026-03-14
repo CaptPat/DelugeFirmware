@@ -1112,7 +1112,7 @@ ActionResult SoundEditor::potentialShortcutPadAction(int32_t x, int32_t y, bool 
 		}
 
 		// For Kit Instrument Clip with Affect Entire Enabled
-		else if (setupKitGlobalFXMenu) {
+		else if (setupKitGlobalFXMenu || (editingKit() && getCurrentInstrumentClip()->affectEntire)) {
 			// only handle the shortcut for velocity in the mod sources column
 			if ((x <= (kDisplayWidth - 2)) || (x == 15 && y == 1)) {
 				item = paramShortcutsForKitGlobalFX[x][y];
@@ -1616,7 +1616,7 @@ bool SoundEditor::setup(Clip* clip, const MenuItem* item, int32_t sourceIndex) {
 				Drum* selectedDrum = ((Kit*)output)->selectedDrum;
 
 				// If Affect Entire is selected and you didn't enter menu using a grid shortcut for a kit row param
-				if (setupKitGlobalFXMenu) {
+				if (setupKitGlobalFXMenu || instrumentClip->affectEntire) {
 					newModControllable = (ModControllableAudio*)(Instrument*)output->toModControllable();
 					newParamManager = &instrumentClip->paramManager;
 					newArpSettings = &instrumentClip->arpSettings;
