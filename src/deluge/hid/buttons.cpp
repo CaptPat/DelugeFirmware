@@ -133,8 +133,10 @@ ActionResult buttonAction(deluge::hid::Button b, bool on, bool inCardRoutine) {
 		}
 	}
 	else if (b == BACK) [[unlikely]] {
-		if (on && !inCardRoutine) {
-			uiTimerManager.setTimer(TimerName::BACK_MENU_EXIT, LONG_PRESS_DURATION);
+		if (on) {
+			if (!inCardRoutine) {
+				uiTimerManager.setTimer(TimerName::BACK_MENU_EXIT, LONG_PRESS_DURATION);
+			}
 		}
 		else {
 			uiTimerManager.unsetTimer(TimerName::BACK_MENU_EXIT);
