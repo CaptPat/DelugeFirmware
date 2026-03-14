@@ -3712,6 +3712,13 @@ Instrument* InstrumentClip::changeOutputType(ModelStackWithTimelineCounter* mode
 		return nullptr;
 	}
 
+	// Clear stale MIDI metadata when switching away from MIDI output to prevent issues during save
+	if (oldOutputType == OutputType::MIDI_OUT) {
+		midiBank = 128;
+		midiSub = 128;
+		midiPGM = 128;
+	}
+
 	actionLogger.deleteAllLogs(); // Can't undo past this!
 
 	Availability availabilityRequirement;
