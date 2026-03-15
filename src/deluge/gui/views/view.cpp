@@ -1024,11 +1024,13 @@ void View::getParameterNameFromModEncoder(int32_t whichModEncoder, char* paramet
 				}
 			}
 
-			paramDisplayName.append(modulation::params::getPatchedParamShortName(modelStackWithParam->paramId));
+			auto* mc = (ModControllableAudio*)activeModControllableModelStack.modControllable;
+			paramDisplayName.append(modulation::params::getPatchedParamShortName(modelStackWithParam->paramId, mc));
 			strncpy(parameterName, paramDisplayName.c_str(), 29);
 		}
 		else {
-			strncpy(parameterName, getParamDisplayName(kind, modelStackWithParam->paramId), 29);
+			auto* mc = (ModControllableAudio*)activeModControllableModelStack.modControllable;
+			strncpy(parameterName, getParamDisplayName(kind, modelStackWithParam->paramId, mc), 29);
 		}
 	}
 }
@@ -1097,7 +1099,8 @@ void View::displayModEncoderValuePopup(params::Kind kind, int32_t paramID, int32
 				parameter_name.append(sourceToStringShort(source2));
 				parameter_name.append("->");
 			}
-			parameter_name.append(modulation::params::getPatchedParamShortName(paramID));
+			auto* mc = (ModControllableAudio*)activeModControllableModelStack.modControllable;
+			parameter_name.append(modulation::params::getPatchedParamShortName(paramID, mc));
 		}
 		else if (isClipContext() && getCurrentOutputType() == OutputType::MIDI_OUT) {
 			MIDIInstrument* midiInstrument = (MIDIInstrument*)getCurrentOutput();
@@ -1125,7 +1128,8 @@ void View::displayModEncoderValuePopup(params::Kind kind, int32_t paramID, int32
 			}
 		}
 		else {
-			const char* name = getParamDisplayName(kind, paramID);
+			auto* mc = (ModControllableAudio*)activeModControllableModelStack.modControllable;
+			const char* name = getParamDisplayName(kind, paramID, mc);
 			if (name != l10n::get(l10n::String::STRING_FOR_NONE)) {
 				parameter_name.append(name);
 			}
@@ -2734,8 +2738,6 @@ ActionResult View::clipStatusPadAction(Clip* clip, bool on, int32_t yDisplayIfIn
 			break;
 		}
 		// No break
-	case UI_MODE_CLIP_PRESSED_IN_SONG_VIEW:
-
 	case UI_MODE_HOLDING_STATUS_PAD:
 		if (on) {
 			enterUIMode(UI_MODE_HOLDING_STATUS_PAD);
@@ -2745,6 +2747,15 @@ ActionResult View::clipStatusPadAction(Clip* clip, bool on, int32_t yDisplayIfIn
 		}
 		else {
 			exitUIMode(UI_MODE_HOLDING_STATUS_PAD);
+		}
+		break;
+
+	case UI_MODE_CLIP_PRESSED_IN_SONG_VIEW:
+		// Toggle clip status without changing UI mode — preserves clip pressed state
+		// so clipPressEnded() is called properly on clip pad release
+		if (on) {
+			sessionView.performActionOnPadRelease = false; // Even though there's a chance we're not in session view
+			session.toggleClipStatus(clip, nullptr, Buttons::isShiftButtonPressed(), kInternalButtonPressLatency);
 		}
 		break;
 
