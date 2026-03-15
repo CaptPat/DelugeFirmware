@@ -28,6 +28,7 @@
 #include "model/song/song.h"
 #include "storage/audio/audio_file_manager.h"
 #include "storage/flash_storage.h"
+#include "storage/sd_card_ops.h"
 #include "storage/storage_manager.h"
 #include "storage/wave_table/wave_table.h"
 #include "util/functions.h"
@@ -127,10 +128,13 @@ bool SaveSongUI::performSave(bool mayOverwrite) {
 
 	display->displayLoadingAnimationText("Saving");
 
+	SDCardOps::beginOperation();
+
 	String filePath;
 	Error error = getCurrentFilePath(&filePath);
 	if (error != Error::NONE) {
 gotError:
+		SDCardOps::endOperation();
 		display->removeLoadingAnimation();
 		display->displayError(error);
 		return false;
@@ -512,11 +516,11 @@ cardError:
 	currentSong->name.set(&enteredText);
 	currentSong->dirPath.set(&currentDir);
 
+	SDCardOps::endOperation();
+
 	if (FlashStorage::defaultStartupSongMode == StartupSongMode::LASTSAVED) {
-		runtimeFeatureSettings.writeSettingsToFile();
+		SDCardOps::requestSettingsWrite();
 	}
-	// While we're at it, save MIDI devices if there's anything new to save.
-	MIDIDeviceManager::writeDevicesToFile();
 
 	close();
 	return true;
