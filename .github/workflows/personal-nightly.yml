@@ -2,8 +2,6 @@ name: Personal Nightly Build
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "30 1 * * *" # daily at 01:30 UTC
   push:
     branches:
       - "personal/nightly"
