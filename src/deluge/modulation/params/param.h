@@ -211,6 +211,9 @@ enum UnpatchedShared : ParamType {
 /// Unpatched params which are only used for Sounds
 enum UnpatchedSound : ParamType {
 	UNPATCHED_PORTAMENTO = UNPATCHED_NUM_SHARED,
+	UNPATCHED_SUSTAIN_PEDAL,
+	UNPATCHED_SOSTENUTO_PEDAL,
+	UNPATCHED_SOFT_PEDAL,
 	UNPATCHED_SOUND_MAX_NUM,
 };
 
@@ -278,6 +281,10 @@ char const* getPatchedParamDisplayName(int32_t p);
 /// Get the short version of a param name, for use in the OLED mod matrix display (maximum 10 characters)
 char const* getPatchedParamShortName(ParamType type);
 char const* getParamDisplayName(Kind kind, int32_t p);
+/// Filter-mode-aware overloads: resolve "LPF morph"→"LPF drive" / "HPF morph"→"HPF FM" when in ladder mode
+char const* getParamDisplayName(Kind kind, int32_t p, ModControllableAudio* mc);
+char const* getPatchedParamDisplayName(int32_t p, ModControllableAudio* mc);
+char const* getPatchedParamShortName(ParamType type, ModControllableAudio* mc);
 
 bool paramNeedsLPF(ParamType p, bool fromAutomation);
 
@@ -350,7 +357,7 @@ const uint32_t unpatchedNonGlobalParamShortcuts[kDisplayWidth][kDisplayHeight] =
     {kNoParamID          , kNoParamID, kNoParamID        , kNoParamID, kNoParamID                , kNoParamID                     , kNoParamID           , kNoParamID},
     {kNoParamID          , kNoParamID, kNoParamID        , kNoParamID, kNoParamID                , kNoParamID                     , kNoParamID           , UNPATCHED_STUTTER_RATE},
     {kNoParamID          , kNoParamID, kNoParamID        , kNoParamID, kNoParamID                , UNPATCHED_SAMPLE_RATE_REDUCTION, UNPATCHED_BITCRUSHING, kNoParamID},
-    {UNPATCHED_PORTAMENTO, kNoParamID, kNoParamID        , kNoParamID, kNoParamID                , UNPATCHED_COMPRESSOR_THRESHOLD , kNoParamID           , kNoParamID},
+    {UNPATCHED_PORTAMENTO, UNPATCHED_SUSTAIN_PEDAL, UNPATCHED_SOFT_PEDAL, UNPATCHED_SOSTENUTO_PEDAL, kNoParamID                , UNPATCHED_COMPRESSOR_THRESHOLD , kNoParamID           , kNoParamID},
     {kNoParamID          , kNoParamID, kNoParamID        , kNoParamID, kNoParamID                , kNoParamID                     , kNoParamID           , kNoParamID},
     {kNoParamID          , kNoParamID, kNoParamID        , kNoParamID, kNoParamID                , kNoParamID                     , kNoParamID           , kNoParamID},
     {kNoParamID          , kNoParamID, kNoParamID        , kNoParamID, UNPATCHED_SIDECHAIN_SHAPE , kNoParamID                     , UNPATCHED_BASS       , UNPATCHED_BASS_FREQ},

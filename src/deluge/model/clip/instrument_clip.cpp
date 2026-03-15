@@ -903,8 +903,9 @@ doNewProbability:
 		}
 	}
 
-	if (ticksTilNextNoteRowEvent < playbackHandler.swungTicksTilNextEvent) {
-		playbackHandler.swungTicksTilNextEvent = ticksTilNextNoteRowEvent;
+	int32_t globalTicksTilNextNoteRow = clipTicksToGlobalTicks(ticksTilNextNoteRowEvent);
+	if (globalTicksTilNextNoteRow < playbackHandler.swungTicksTilNextEvent) {
+		playbackHandler.swungTicksTilNextEvent = globalTicksTilNextNoteRow;
 	}
 }
 
@@ -3711,6 +3712,13 @@ Instrument* InstrumentClip::changeOutputType(ModelStackWithTimelineCounter* mode
 		return nullptr;
 	}
 
+	// Clear stale MIDI metadata when switching away from MIDI output to prevent issues during save
+	if (oldOutputType == OutputType::MIDI_OUT) {
+		midiBank = 128;
+		midiSub = 128;
+		midiPGM = 128;
+	}
+
 	actionLogger.deleteAllLogs(); // Can't undo past this!
 
 	Availability availabilityRequirement;
@@ -4692,10 +4700,11 @@ bool InstrumentClip::hasAnyPitchExpressionAutomationOnNoteRows() {
 }
 
 void InstrumentClip::incrementPos(ModelStackWithTimelineCounter* modelStack, int32_t numTicks) {
-	Clip::incrementPos(modelStack, numTicks);
+	Clip::incrementPos(modelStack, numTicks); // Scales ticks via Bresenham accumulator
 
-	ticksTilNextNoteRowEvent -= numTicks; // We're one tick closer to the next event...
-	noteRowsNumTicksBehindClip += numTicks;
+	int32_t clipTicks = lastScaledTickIncrement_; // Use clip-domain ticks, not global
+	ticksTilNextNoteRowEvent -= clipTicks;        // We're one tick closer to the next event...
+	noteRowsNumTicksBehindClip += clipTicks;
 
 	if (ticksTilNextNoteRowEvent <= 0) {
 

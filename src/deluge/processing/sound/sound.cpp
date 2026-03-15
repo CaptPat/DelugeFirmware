@@ -136,6 +136,9 @@ void Sound::initParams(ParamManager* paramManager) {
 	unpatchedParams->kind = params::Kind::UNPATCHED_SOUND;
 
 	unpatchedParams->params[params::UNPATCHED_PORTAMENTO].setCurrentValueBasicForSetup(-2147483648);
+	unpatchedParams->params[params::UNPATCHED_SUSTAIN_PEDAL].setCurrentValueBasicForSetup(-2147483648);
+	unpatchedParams->params[params::UNPATCHED_SOSTENUTO_PEDAL].setCurrentValueBasicForSetup(-2147483648);
+	unpatchedParams->params[params::UNPATCHED_SOFT_PEDAL].setCurrentValueBasicForSetup(-2147483648);
 
 	PatchedParamSet* patchedParams = paramManager->getPatchedParamSet();
 	patchedParams->params[params::LOCAL_VOLUME].setCurrentValueBasicForSetup(0);
@@ -1518,6 +1521,11 @@ void Sound::noteOn(ModelStackWithThreeMainThings* modelStack, ArpeggiatorBase* a
 
 	UnpatchedParamSet* unpatchedParams = paramManager->getUnpatchedParamSet();
 
+	// CC67 soft pedal — reduce velocity when active (traditional una corda: ~2/3 velocity)
+	if (unpatchedParams->getValue(params::UNPATCHED_SOFT_PEDAL) >= 0) {
+		velocity = std::max((velocity * 2 + 1) / 3, int32_t{1});
+	}
+
 	ArpeggiatorSettings* arpSettings = getArpSettings();
 	if (arpSettings != nullptr) {
 		arpSettings->updateParamsFromUnpatchedParamSet(unpatchedParams);
@@ -1906,7 +1914,7 @@ void Sound::noteOffPostArpeggiator(ModelStackWithSoundFlags* modelStack, int32_t
 
 			else {
 justSwitchOff:
-				voice->noteOff(modelStack);
+				voice->noteOff(modelStack, true, noteCode == ALL_NOTES_OFF);
 			}
 		}
 	}
@@ -3017,6 +3025,24 @@ void Sound::setSynthMode(SynthMode value, Song* song) {
 
 	SynthMode oldSynthMode = synthMode;
 	synthMode = value;
+
+	// Update filter modes BEFORE setting up patching, so patch cables correctly
+	// reflect the new synth mode's filter state (fixes #4232)
+	if (synthMode == SynthMode::FM && oldSynthMode != SynthMode::FM) {
+		// switch the filters off so they don't render unless deliberately enabled
+		lpfMode = FilterMode::OFF;
+		hpfMode = FilterMode::OFF;
+	}
+	else if (synthMode != SynthMode::FM && oldSynthMode == SynthMode::FM) {
+		// switch the filters back on if needed
+		if (lpfMode == FilterMode::OFF) {
+			lpfMode = FilterMode::TRANSISTOR_24DB;
+		}
+		if (hpfMode == FilterMode::OFF) {
+			hpfMode = FilterMode::HPLADDER;
+		}
+	}
+
 	setupPatchingForAllParamManagers(song);
 
 	// Change mod knob functions over. Switching *to* FM...
@@ -3035,9 +3061,6 @@ void Sound::setSynthMode(SynthMode value, Song* song) {
 				}
 			}
 		}
-		// switch the filters off so they don't render unless deliberately enabled
-		lpfMode = FilterMode::OFF;
-		hpfMode = FilterMode::OFF;
 	}
 
 	// ... and switching *from* FM...
@@ -3048,13 +3071,6 @@ void Sound::setSynthMode(SynthMode value, Song* song) {
 				modKnobs[f][0].paramDescriptor.setToHaveParamOnly(params::LOCAL_LPF_RESONANCE);
 				modKnobs[f][1].paramDescriptor.setToHaveParamOnly(params::LOCAL_LPF_FREQ);
 			}
-		}
-		// switch the filters back on if needed
-		if (lpfMode == FilterMode::OFF) {
-			lpfMode = FilterMode::TRANSISTOR_24DB;
-		}
-		if (hpfMode == FilterMode::OFF) {
-			hpfMode = FilterMode::HPLADDER;
 		}
 	}
 }
@@ -3084,6 +3100,81 @@ void Sound::recalculateAllVoicePhaseIncrements(ModelStackWithSoundFlags* modelSt
 
 	for (const ActiveVoice& voice : voices_) {
 		voice->calculatePhaseIncrements(modelStack);
+	}
+}
+
+void Sound::retriggerVoicesForTransposeChange(ModelStackWithSoundFlags* modelStack) {
+	if (voices_.empty() || modelStack == nullptr) {
+		return;
+	}
+
+	// Check if any source uses multisamples (multiple zones)
+	bool hasMultisamples = false;
+	for (int32_t s = 0; s < kNumSources; s++) {
+		if (synthMode != SynthMode::FM && sources[s].oscType == OscType::SAMPLE
+		    && sources[s].ranges.getNumElements() > 1) {
+			hasMultisamples = true;
+			break;
+		}
+	}
+
+	// No multisamples — existing behavior is correct
+	if (!hasMultisamples) {
+		recalculateAllVoicePhaseIncrements(modelStack);
+		return;
+	}
+
+	// For each voice, check if the multisample zone changed and re-trigger if so
+	for (auto it = voices_.begin(); it != voices_.end();) {
+		const ActiveVoice& voice = *it;
+
+		// Check if any multisample source's zone would change with the new transpose
+		bool rangeChanged = false;
+		for (int32_t s = 0; s < kNumSources; s++) {
+			if (synthMode != SynthMode::FM && sources[s].oscType == OscType::SAMPLE
+			    && sources[s].ranges.getNumElements() > 1) {
+				MultiRange* newRange = sources[s].getRange(voice->noteCodeAfterArpeggiation + transpose);
+				if (newRange && newRange->getAudioFileHolder() != voice->guides[s].audioFileHolder) {
+					rangeChanged = true;
+					break;
+				}
+			}
+		}
+
+		if (!rangeChanged) {
+			// Same zone — just update pitch as before
+			voice->calculatePhaseIncrements(modelStack);
+			++it;
+			continue;
+		}
+
+		// Zone changed — re-trigger the voice with recovered parameters
+		int32_t notePreArp = voice->inputCharacteristics[util::to_underlying(MIDICharacteristic::NOTE)];
+		int32_t notePostArp = voice->noteCodeAfterArpeggiation;
+		int32_t midiChannel = voice->inputCharacteristics[util::to_underlying(MIDICharacteristic::CHANNEL)];
+
+		// Recover velocity from patched source value
+		int32_t velSrc = voice->sourceValues[util::to_underlying(PatchSource::VELOCITY)];
+		int32_t velRecovered = std::clamp((velSrc / 33554432) + 64, (int32_t)0, (int32_t)127);
+		uint8_t velocity = (velSrc >= 2147483647) ? 128 : static_cast<uint8_t>(velRecovered);
+
+		// Recover MPE values (stored shifted left by 16)
+		int16_t mpeValues[kNumExpressionDimensions];
+		for (int32_t m = 0; m < kNumExpressionDimensions; m++) {
+			mpeValues[m] = static_cast<int16_t>(voice->localExpressionSourceValuesBeforeSmoothing[m] >> 16);
+		}
+
+		uint32_t syncLength = voice->guides[0].sequenceSyncLengthTicks;
+
+		// Re-trigger with resetEnvelopes=true for clean attack from new sample zone
+		bool success = voice->noteOn(modelStack, notePreArp, notePostArp, velocity, syncLength, 0, 0, true, midiChannel,
+		                             mpeValues);
+		if (!success) {
+			freeActiveVoice(voice, modelStack, false);
+			it = voices_.erase(it);
+			continue;
+		}
+		++it;
 	}
 }
 

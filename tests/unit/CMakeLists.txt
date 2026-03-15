@@ -72,6 +72,14 @@ add_executable(UnitTests
         sync_tests.cpp
         chord_tests.cpp
         time_tests.cpp
+        browser_search_tests.cpp
+        envelope_tests.cpp
+        filter_morph_label_tests.cpp
+        notes_state_tests.cpp
+        reverb_filter_roundtrip_tests.cpp
+        pedal_state_tests.cpp
+        tempo_ratio_tests.cpp
+        time_signature_tests.cpp
 )
 add_test(NAME UnitTests
         COMMAND UnitTests)

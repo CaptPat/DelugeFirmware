@@ -53,6 +53,7 @@
 #include "model/consequence/consequence_begin_playback.h"
 #include "model/consequence/consequence_tempo_change.h"
 #include "model/instrument/kit.h"
+#include "model/instrument/melodic_instrument.h"
 #include "model/mod_controllable/mod_controllable_audio.h"
 #include "model/model_stack.h"
 #include "model/sample/sample_holder.h"
@@ -104,7 +105,9 @@ PlaybackHandler::PlaybackHandler() {
 	analogClockInputAutoStart = true;
 	metronomeOn = false;
 	midiOutClockEnabled = true;
+	midiOutTransportEnabled = true;
 	midiInClockEnabled = true;
+	midiInTransportEnabled = true;
 	tempoMagnitudeMatchingEnabled = false;
 	posToNextContinuePlaybackFrom = 0;
 	stopOutputRecordingAtLoopEnd = false;
@@ -424,7 +427,7 @@ void PlaybackHandler::setupPlaybackUsingInternalClock(int32_t buttonPressLatency
 	numOutputClocksWaitingToBeSent = 0;
 
 	// Want to send start / continue message, probably
-	if (currentlySendingMIDIOutputClocks()) {
+	if (currentlySendingMIDIOutputTransport()) {
 		if (newPos) { // "continue"
 			sendOutPositionViaMIDI(newPos,
 			                       !ticksLeftInCountIn); // "Continue" message will only be sent if no count-in
@@ -457,6 +460,10 @@ void PlaybackHandler::setupPlaybackUsingInternalClock(int32_t buttonPressLatency
 
 bool PlaybackHandler::currentlySendingMIDIOutputClocks() {
 	return midiOutClockEnabled;
+}
+
+bool PlaybackHandler::currentlySendingMIDIOutputTransport() {
+	return midiOutTransportEnabled;
 }
 
 uint32_t PlaybackHandler::timerTicksToOutputTicks(uint32_t timerTicks) {
@@ -571,7 +578,7 @@ void PlaybackHandler::setupPlayback(int32_t newPlaybackState, int32_t playFromPo
 }
 
 void PlaybackHandler::endPlayback() {
-	if (isInternalClockActive() && currentlySendingMIDIOutputClocks()) {
+	if (isInternalClockActive() && currentlySendingMIDIOutputTransport()) {
 		midiEngine.sendStop(this);
 	}
 
@@ -592,6 +599,22 @@ void PlaybackHandler::endPlayback() {
 	playbackState = 0;
 
 	cvEngine.playbackEnded(); // Call this *after* playbackState is set
+
+	// Release any voices held by sustain pedal — note-offs from endPlayback() may have been
+	// deferred by Voice::noteOff() if sustain param was active. We don't reset the param itself
+	// (it should reflect the physical pedal state), just force-release the deferred voices.
+	if (currentSong && runtimeFeatureSettings.isOn(RuntimeFeatureSettingType::EnableSustainPedal)) {
+		for (Output* output = currentSong->firstOutput; output; output = output->next) {
+			if (output->type == OutputType::SYNTH) {
+				char sustainStackMemory[MODEL_STACK_MAX_SIZE];
+				ModelStack* sustainStack = setupModelStackWithSong(sustainStackMemory, currentSong);
+				ModelStackWithTimelineCounter* sustainStackWithTC =
+				    sustainStack->addTimelineCounter(output->getActiveClip());
+				static_cast<MelodicInstrument*>(output)->releaseSustainedVoices(sustainStackWithTC);
+			}
+		}
+	}
+
 	PadLEDs::clearTickSquares();
 
 	// Sometimes, ending playback will trigger an instant song swap
@@ -882,7 +905,7 @@ void PlaybackHandler::actionSwungTick() {
 			// Perhaps we'd like to send a MIDI "start" message, cos we didn't before
 			cvEngine.playbackBegun();
 
-			if (currentlySendingMIDIOutputClocks()) {
+			if (currentlySendingMIDIOutputTransport()) {
 				if (posToNextContinuePlaybackFrom) {
 					midiEngine.sendContinue(this); // Position pointer was already sent when "play" pressed
 				}
@@ -910,7 +933,9 @@ void PlaybackHandler::actionSwungTick() {
 				display->displayPopup(buffer, 0, true, 255, 2);
 			}
 			swungTicksTilNextEvent = 2147483647;
-			goto doMetronome;
+			if (metronomeOn) {
+				goto doMetronome;
+			}
 		}
 	}
 
@@ -940,17 +965,19 @@ doMetronome:
 					currentMetronomeTick += metronomeOffset;
 				}
 
-				uint32_t swungTicksPerQuarterNote = currentSong->getQuarterNoteLength();
+				Clip* metroClip = getCurrentClip();
+				TimeSignature metroTimeSig = metroClip ? metroClip->timeSignature : currentSong->defaultTimeSignature;
+				int32_t tickMag = currentSong->getInputTickMagnitude();
+				uint32_t oneBeat = increaseMagnitude(metroTimeSig.beatLengthInBaseTicks(), tickMag);
+				uint32_t oneBar = increaseMagnitude(metroTimeSig.barLengthInBaseTicks(), tickMag);
 
-				if ((currentMetronomeTick % swungTicksPerQuarterNote) == 0) {
-					uint32_t phaseIncrement =
-					    ((currentMetronomeTick % (swungTicksPerQuarterNote << 2)) == 0) ? 128411753 : 50960238;
+				if ((currentMetronomeTick % oneBeat) == 0) {
+					uint32_t phaseIncrement = ((currentMetronomeTick % oneBar) == 0) ? 128411753 : 50960238;
 					AudioEngine::metronome.trigger(phaseIncrement);
 				}
 
-				int32_t ticksIntoCurrentBeep = currentMetronomeTick % swungTicksPerQuarterNote;
-				int32_t swungTicksTilNextMetronomeEvent =
-				    swungTicksPerQuarterNote - ticksIntoCurrentBeep; // Ticks til next beep
+				int32_t ticksIntoCurrentBeep = currentMetronomeTick % oneBeat;
+				int32_t swungTicksTilNextMetronomeEvent = oneBeat - ticksIntoCurrentBeep; // Ticks til next beep
 				swungTicksTilNextEvent = std::min(swungTicksTilNextEvent, swungTicksTilNextMetronomeEvent);
 			}
 		}
@@ -1511,6 +1538,9 @@ void PlaybackHandler::setupPlaybackUsingExternalClock(bool switchingFromInternal
 }
 
 void PlaybackHandler::positionPointerReceived(uint8_t data1, uint8_t data2) {
+	if (!midiInTransportEnabled) {
+		return;
+	}
 	D_PRINTLN("position");
 	uint32_t pos = (((uint32_t)data2 << 7) | data1) * 6;
 
@@ -1542,7 +1572,7 @@ void PlaybackHandler::positionPointerReceived(uint8_t data1, uint8_t data2) {
 }
 
 void PlaybackHandler::startMessageReceived() {
-	if (ignoringMidiClockInput || !midiInClockEnabled) {
+	if (ignoringMidiClockInput || !midiInTransportEnabled) {
 		return;
 	}
 	D_PRINTLN("start");
@@ -1579,7 +1609,7 @@ bool PlaybackHandler::startIgnoringMidiClockInputIfNecessary() {
 }
 
 void PlaybackHandler::continueMessageReceived() {
-	if (ignoringMidiClockInput || !midiInClockEnabled) {
+	if (ignoringMidiClockInput || !midiInTransportEnabled) {
 		return;
 	}
 
@@ -1608,7 +1638,7 @@ void PlaybackHandler::continueMessageReceived() {
 }
 
 void PlaybackHandler::stopMessageReceived() {
-	if (ignoringMidiClockInput || !midiInClockEnabled) {
+	if (ignoringMidiClockInput || !midiInTransportEnabled) {
 		return;
 	}
 	if (isExternalClockActive()) {
@@ -2074,6 +2104,8 @@ void PlaybackHandler::commandEditClockOutScale(int8_t offset) {
 			// Fix MIDI beat clock output
 			if (currentlySendingMIDIOutputClocks()) {
 				resyncMIDIClockOutTicksToInternalTicks();
+			}
+			if (currentlySendingMIDIOutputClocks() || currentlySendingMIDIOutputTransport()) {
 				sendOutPositionViaMIDI(getCurrentInternalTickCount());
 			}
 
@@ -2217,17 +2249,22 @@ void PlaybackHandler::sendOutPositionViaMIDI(int32_t pos, bool sendContinueMessa
 	surplusOutputTicks++; // Need one extra one to make the follower "play" the position the pointer points to,
 	                      // right now.
 
-	midiEngine.sendPositionPointer(this, positionPointer);
+	if (currentlySendingMIDIOutputTransport()) {
+		midiEngine.sendPositionPointer(this, positionPointer);
 
-	// If we've just switched output clocks back on and they were off, we'd better send a continue message
-	// BUT this didn't work in Ableton! In Live 8, you could instead put a "start" message *before* sending the
-	// position pointer. But this doesn't work anymore in Live 9, so let's just do it the "proper" MIDI way always.
-	if (sendContinueMessageToo) {
-		midiEngine.sendContinue(this);
+		// If we've just switched output clocks back on and they were off, we'd better send a continue message
+		// BUT this didn't work in Ableton! In Live 8, you could instead put a "start" message *before* sending
+		// the position pointer. But this doesn't work anymore in Live 9, so let's just do it the "proper" MIDI
+		// way always.
+		if (sendContinueMessageToo) {
+			midiEngine.sendContinue(this);
+		}
 	}
 
-	for (int32_t i = 0; i < surplusOutputTicks; i++) {
-		midiEngine.sendClock(this, i != 0);
+	if (currentlySendingMIDIOutputClocks()) {
+		for (int32_t i = 0; i < surplusOutputTicks; i++) {
+			midiEngine.sendClock(this, i != 0);
+		}
 	}
 }
 
@@ -2235,22 +2272,17 @@ void PlaybackHandler::setMidiOutClockMode(bool newValue) {
 	if (newValue == midiOutClockEnabled) {
 		return;
 	}
-	int32_t oldValue = midiOutClockEnabled;
 	midiOutClockEnabled = newValue;
 
-	// If currently playing on internal clock...
+	// If currently playing on internal clock, sync or cancel clock ticks.
+	// Note: STOP/continue messages are now handled by the separate transport toggle
+	// (midiOutTransportEnabled), so disabling clock output no longer sends STOP.
 	if (isInternalClockActive()) {
-
-		// If we just enabled the output clock...
-		if (!oldValue) {
+		if (newValue) {
 			resyncMIDIClockOutTicksToInternalTicks();
-			sendOutPositionViaMIDI(getCurrentInternalTickCount(), true);
 		}
-
-		// Or if we just disabled it...
-		else if (!newValue) {
+		else {
 			midiClockOutTickScheduled = false;
-			midiEngine.sendStop(this);
 		}
 	}
 }
