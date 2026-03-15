@@ -2,6 +2,8 @@ name: Nightly Build
 
 on:
   workflow_dispatch: # allows manual triggering
+  schedule:
+    - cron: "14 0 * * *" # runs daily at 00:14
 
 jobs:
   nightly-detect:
