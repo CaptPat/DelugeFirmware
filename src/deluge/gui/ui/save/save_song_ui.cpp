@@ -128,13 +128,17 @@ bool SaveSongUI::performSave(bool mayOverwrite) {
 
 	display->displayLoadingAnimationText("Saving");
 
-	SDCardOps::beginOperation();
+	if (!SDCardOps::tryAcquire()) {
+		display->removeLoadingAnimation();
+		display->displayPopup("SD busy");
+		return false;
+	}
 
 	String filePath;
 	Error error = getCurrentFilePath(&filePath);
 	if (error != Error::NONE) {
 gotError:
-		SDCardOps::endOperation();
+		SDCardOps::release();
 		display->removeLoadingAnimation();
 		display->displayError(error);
 		return false;
@@ -516,7 +520,7 @@ cardError:
 	currentSong->name.set(&enteredText);
 	currentSong->dirPath.set(&currentDir);
 
-	SDCardOps::endOperation();
+	SDCardOps::release();
 
 	if (FlashStorage::defaultStartupSongMode == StartupSongMode::LASTSAVED) {
 		SDCardOps::requestSettingsWrite();

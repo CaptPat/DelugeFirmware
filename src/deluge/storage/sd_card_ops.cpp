@@ -20,6 +20,7 @@
 #include "definitions_cxx.hpp"
 #include "io/midi/midi_device_manager.h"
 #include "model/settings/runtime_feature_settings.h"
+#include <atomic>
 #include <cstring>
 
 extern "C" {
@@ -32,7 +33,7 @@ namespace {
 
 constexpr size_t kMaxDeferredOps = 8;
 
-int32_t operationDepth = 0;
+std::atomic_flag sdLock = ATOMIC_FLAG_INIT;
 bool settingsWritePending = false;
 
 DeferredOp deferredQueue[kMaxDeferredOps];
@@ -57,9 +58,8 @@ void executeDeferredOp(const DeferredOp& op) {
 }
 
 void drainQueue() {
-	// Execute all queued ops. We don't re-set operationInProgress here
-	// because drain runs after endOperation has already decremented depth to 0,
-	// and these deferred ops are small/fast (single FatFS calls).
+	// Execute all queued ops. Called after release() clears the lock.
+	// These deferred ops are small/fast (single FatFS calls).
 	for (size_t i = 0; i < deferredCount; i++) {
 		executeDeferredOp(deferredQueue[i]);
 	}
@@ -87,27 +87,32 @@ bool enqueue(const DeferredOp& op) {
 
 } // anonymous namespace
 
-void beginOperation() {
-	operationDepth++;
+bool tryAcquire() {
+	return !sdLock.test_and_set(std::memory_order_acquire);
 }
 
-void endOperation() {
-	if (operationDepth > 0) {
-		operationDepth--;
-	}
-	if (operationDepth == 0) {
-		drainQueue();
-	}
+void release() {
+	sdLock.clear(std::memory_order_release);
+	drainQueue();
 }
 
-bool operationInProgress() {
-	return operationDepth > 0;
+bool isLocked() {
+	// Try to acquire — if we can, it wasn't locked, so clear and return false.
+	// If we can't, it was locked.
+	if (!sdLock.test_and_set(std::memory_order_acquire)) {
+		sdLock.clear(std::memory_order_release);
+		return false;
+	}
+	return true;
 }
 
 FRESULT requestUnlink(const char* path) {
-	if (!operationInProgress()) {
-		return f_unlink(path);
+	if (tryAcquire()) {
+		FRESULT result = f_unlink(path);
+		release();
+		return result;
 	}
+	// Lock held — defer the operation
 	UnlinkOp op;
 	strncpy(op.path, path, FF_MAX_LFN);
 	op.path[FF_MAX_LFN] = '\0';
@@ -116,9 +121,12 @@ FRESULT requestUnlink(const char* path) {
 }
 
 FRESULT requestRename(const char* pathOld, const char* pathNew) {
-	if (!operationInProgress()) {
-		return f_rename(pathOld, pathNew);
+	if (tryAcquire()) {
+		FRESULT result = f_rename(pathOld, pathNew);
+		release();
+		return result;
 	}
+	// Lock held — defer the operation
 	RenameOp op;
 	strncpy(op.pathOld, pathOld, FF_MAX_LFN);
 	op.pathOld[FF_MAX_LFN] = '\0';
@@ -129,12 +137,13 @@ FRESULT requestRename(const char* pathOld, const char* pathNew) {
 }
 
 void requestSettingsWrite() {
-	if (!operationInProgress()) {
+	if (tryAcquire()) {
 		MIDIDeviceManager::writeDevicesToFile();
 		runtimeFeatureSettings.writeSettingsToFile();
+		release();
 		return;
 	}
-	// Coalesce — just set the flag, don't consume a queue slot
+	// Lock held — coalesce, don't consume a queue slot
 	settingsWritePending = true;
 }
 

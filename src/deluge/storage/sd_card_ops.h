@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <variant>
@@ -53,18 +54,27 @@ struct SettingsWriteOp {};
 
 using DeferredOp = std::variant<UnlinkOp, RenameOp, SettingsWriteOp>;
 
-// --- Session-level SD operation guard ---
+// --- Atomic SD card lock ---
+//
+// Any code that wants to access the SD card (reads or writes) must acquire
+// the lock first via tryAcquire(). This replaces the `inCardRoutine`
+// parameter that was previously threaded through ~60 UI call sites.
+//
+// - Read callers: call tryAcquire(). If it returns false, the card is busy —
+//   return ActionResult::REMIND_ME_OUTSIDE_CARD_ROUTINE (same behavior as
+//   today, but the check is at the lock, not a passed-in parameter).
+// - Write callers: use the requestUnlink/requestRename/requestSettingsWrite
+//   API below, which auto-defers if the lock is held.
 
-/// Call before starting a high-level SD operation (song save, file browse, etc.).
-/// Nested calls are counted — each begin must have a matching end.
-void beginOperation();
+/// Attempt to acquire exclusive SD card access. Returns true if acquired.
+/// Uses atomic test-and-set — safe to call from any context.
+bool tryAcquire();
 
-/// Call when the high-level SD operation is complete.
-/// When the outermost operation ends, any queued deferred ops are drained.
-void endOperation();
+/// Release SD card access. Drains any queued deferred operations.
+void release();
 
-/// Returns true if a high-level SD operation is currently in progress.
-bool operationInProgress();
+/// Returns true if the SD card lock is currently held.
+bool isLocked();
 
 // --- Defer-or-execute API ---
 //
