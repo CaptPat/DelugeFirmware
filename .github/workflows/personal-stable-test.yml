@@ -33,7 +33,7 @@ jobs:
             build \
             --verbose \
             --tag-metadata \
-            --type beta \
+            --type alpha \
             ${{ matrix.build-type }}
 
       - name: Upload firmware artifact
