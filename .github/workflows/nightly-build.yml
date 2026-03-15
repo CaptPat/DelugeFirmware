@@ -1,9 +1,10 @@
-name: Nightly Build
+name: Baseline Build (upstream main)
 
 on:
-  workflow_dispatch: # allows manual triggering
-  schedule:
-    - cron: "14 0 * * *" # runs daily at 00:14
+  workflow_dispatch: # trigger manually after rebasing main to new upstream version
+  push:
+    branches:
+      - "main"
 
 jobs:
   nightly-detect:
