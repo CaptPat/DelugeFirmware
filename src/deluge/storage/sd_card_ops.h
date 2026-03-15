@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <variant>
 
@@ -51,8 +52,6 @@ struct RenameOp {
 struct SettingsWriteOp {};
 
 using DeferredOp = std::variant<UnlinkOp, RenameOp, SettingsWriteOp>;
-
-constexpr size_t kMaxDeferredOps = 8;
 
 // --- Session-level SD operation guard ---
 

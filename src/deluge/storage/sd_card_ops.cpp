@@ -30,6 +30,8 @@ namespace SDCardOps {
 
 namespace {
 
+constexpr size_t kMaxDeferredOps = 8;
+
 int32_t operationDepth = 0;
 bool settingsWritePending = false;
 
