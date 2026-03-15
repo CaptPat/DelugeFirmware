@@ -17,6 +17,7 @@
 
 #include "hid/buttons.h"
 #include "definitions_cxx.hpp"
+#include "extern.h"
 #include "gui/ui/audio_recorder.h"
 #include "gui/ui/load/load_song_ui.h"
 #include "gui/ui/ui.h"
@@ -146,7 +147,7 @@ ActionResult buttonAction(deluge::hid::Button b, bool on, bool inCardRoutine) {
 	}
 	else if (b == BACK) [[unlikely]] {
 		if (on) {
-			if (!inCardRoutine) {
+			if (!sdRoutineLock) {
 				uiTimerManager.setTimer(TimerName::BACK_MENU_EXIT, LONG_PRESS_DURATION);
 			}
 		}
