@@ -44,6 +44,7 @@
 #include "storage/audio/audio_file_manager.h"
 #include "storage/file_item.h"
 #include "storage/flash_storage.h"
+#include "storage/sd_card_ops.h"
 #include "storage/storage_manager.h"
 #include "util/try.h"
 #include <string.h>
@@ -171,7 +172,7 @@ void LoadSongUI::enterKeyPress() {
 		LoadUI::enterKeyPress(); // Converts name to numeric-only if it was typed as text
 		performLoad();           // May fail
 		if (FlashStorage::defaultStartupSongMode == StartupSongMode::LASTOPENED) {
-			runtimeFeatureSettings.writeSettingsToFile();
+			SDCardOps::requestSettingsWrite();
 		}
 	}
 }
@@ -301,7 +302,7 @@ void LoadSongUI::doQueueLoadNextSongIfAvailable(int8_t offset) {
 				AudioEngine::logAction("performLoad");
 				performLoad();
 				if (FlashStorage::defaultStartupSongMode == StartupSongMode::LASTOPENED) {
-					runtimeFeatureSettings.writeSettingsToFile();
+					SDCardOps::requestSettingsWrite();
 				}
 			}
 		}
