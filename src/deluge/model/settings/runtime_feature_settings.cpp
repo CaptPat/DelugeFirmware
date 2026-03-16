@@ -198,7 +198,7 @@ void RuntimeFeatureSettings::init() {
 
 	// MIDI CC64 sustain pedal
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::EnableSustainPedal],
-	                  STRING_FOR_COMMUNITY_FEATURE_SUSTAIN_PEDAL, "enableSustainPedal", RuntimeFeatureStateToggle::Off);
+	                  STRING_FOR_COMMUNITY_FEATURE_SUSTAIN_PEDAL, "enableSustainPedal", RuntimeFeatureStateToggle::On);
 
 	// MIDI CC66 sostenuto pedal
 	SetupOnOffSetting(settings[RuntimeFeatureSettingType::EnableSostenutoPedal],
