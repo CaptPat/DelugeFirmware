@@ -891,23 +891,11 @@ doLoadAsWaveTable:
 
 			// Alright, if we're still here, it was successfully loaded as a WaveTable!
 
-			// Only set default mod knob mappings when transitioning to wavetable,
-			// not when the oscillator was already a wavetable (preserves user mappings).
+			// Set default mod knob mappings for wavetable (preserves user mappings
+			// when the oscillator was already a wavetable).
+			soundEditor.currentSound->applyWavetableModKnobDefaults(soundEditor.currentSourceIndex,
+			                                                        wasAlreadyWavetable);
 			if (!wasAlreadyWavetable) {
-				if (soundEditor.currentSourceIndex == 0) { // Osc 1
-					soundEditor.currentSound->modKnobs[7][1].paramDescriptor.setToHaveParamOnly(
-					    params::LOCAL_OSC_A_WAVE_INDEX);
-
-					if (!soundEditor.currentSound->modKnobs[7][0].paramDescriptor.isSetToParamWithNoSource(
-					        params::LOCAL_OSC_B_WAVE_INDEX)) {
-						soundEditor.currentSound->modKnobs[7][0].paramDescriptor.setToHaveParamAndSource(
-						    params::LOCAL_OSC_A_WAVE_INDEX, PatchSource::LFO_LOCAL_1);
-					}
-				}
-				else { // Osc 2
-					soundEditor.currentSound->modKnobs[7][0].paramDescriptor.setToHaveParamOnly(
-					    params::LOCAL_OSC_B_WAVE_INDEX);
-				}
 				getCurrentOutput()->modKnobMode = 7;
 			}
 			view.setKnobIndicatorLevels(); // Visually update.

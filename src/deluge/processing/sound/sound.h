@@ -326,6 +326,12 @@ public:
 
 	virtual const char* getName() { return nullptr; }
 
+	/// @brief Set default mod knob mappings for wavetable oscillator.
+	/// Extracted from SampleBrowser::doLoadAsWaveTable() for testability.
+	/// @param sourceIndex 0 = Osc A, 1 = Osc B
+	/// @param wasAlreadyWavetable If true, preserves existing user mappings
+	void applyWavetableModKnobDefaults(int32_t sourceIndex, bool wasAlreadyWavetable);
+
 private:
 	uint32_t getGlobalLFOPhaseIncrement(LFO_ID lfoId, deluge::modulation::params::Global param);
 	void recalculateModulatorTransposer(uint8_t m, ModelStackWithSoundFlags* modelStack);

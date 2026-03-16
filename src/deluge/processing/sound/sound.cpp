@@ -3075,6 +3075,24 @@ void Sound::setSynthMode(SynthMode value, Song* song) {
 	}
 }
 
+void Sound::applyWavetableModKnobDefaults(int32_t sourceIndex, bool wasAlreadyWavetable) {
+	if (wasAlreadyWavetable) {
+		return; // Preserve user mappings when already a wavetable
+	}
+
+	if (sourceIndex == 0) { // Osc A
+		modKnobs[7][1].paramDescriptor.setToHaveParamOnly(params::LOCAL_OSC_A_WAVE_INDEX);
+
+		if (!modKnobs[7][0].paramDescriptor.isSetToParamWithNoSource(params::LOCAL_OSC_B_WAVE_INDEX)) {
+			modKnobs[7][0].paramDescriptor.setToHaveParamAndSource(params::LOCAL_OSC_A_WAVE_INDEX,
+			                                                       PatchSource::LFO_LOCAL_1);
+		}
+	}
+	else { // Osc B
+		modKnobs[7][0].paramDescriptor.setToHaveParamOnly(params::LOCAL_OSC_B_WAVE_INDEX);
+	}
+}
+
 void Sound::setModulatorTranspose(int32_t m, int32_t value, ModelStackWithSoundFlags* modelStack) {
 	modulatorTranspose[m] = value;
 	recalculateAllVoicePhaseIncrements(modelStack);
